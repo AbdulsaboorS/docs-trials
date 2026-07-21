@@ -1,0 +1,49 @@
+docs/ARCHITECTURE.md
+  s_11032c9acd5e07::t_5a3c0195058ca3 82
+docs/IMPLEMENTATION.md
+  s_11032c9acd5e07::t_a62d8b5da57028 78-80
+docs/RUNBOOK.md
+  s_11032c9acd5e07::t_34521c35a37994 67-70
+research/platform-capabilities.md
+  s_11032c9acd5e07::t_d7c18520898399 39-40
+src/artifacts.ts
+  s_d447eca85eac1b::t_6a880922956252 1-2,5,10-16,35,38-138,142-279,283-298,310,324,329,344-347,367,370-372,388-498
+src/browser-grader.ts
+  s_11032c9acd5e07::t_c41fbc4581a0e6 2-6,11-12,26,33-35,37-38,42-46,51-55,138,147-149,151-152,156-160,175-176
+src/cloud-run-control.ts
+  s_11032c9acd5e07::t_f22c03fb077688 2-6,51,56,61-71
+src/controlled-run-results.ts
+  s_d447eca85eac1b::t_4ea9a52755e42c 3-9,38-60
+src/platform-env.ts
+  s_11032c9acd5e07::t_bf1cfe7b157af6 9
+src/redact.ts
+  s_d447eca85eac1b::t_fb1360b85a5813 2-5,8,13,18,37-42,61
+src/trial-workflow.ts
+  s_d447eca85eac1b::t_2e7decea147c8b 4,19,44-45,88-101,199-202,205,208,220,228,248-257,259-260,271-275,411-418,420,450-466
+tests/browser-grader.test.ts
+  s_d447eca85eac1b::t_63e3b096f384c9 2,44-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "debccd22fe3b6fcc74afa2b523c0d02882c96c17",
+  "prompts": {},
+  "sessions": {
+    "s_11032c9acd5e07": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0940ec0d6ffedE6g4yVOSlkUa2",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_d447eca85eac1b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_07a85bb16ffeG5LUBzwbir6x4k",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
