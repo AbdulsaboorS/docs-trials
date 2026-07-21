@@ -1,0 +1,21 @@
+:root {
+  color: #172019;
+  background: #f4f0e7;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(44rem, calc(100% - 2rem));
+  margin: 5rem auto;
+}
+
+.eyebrow {
+  color: #526057;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}

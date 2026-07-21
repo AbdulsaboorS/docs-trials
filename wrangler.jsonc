@@ -1,0 +1,74 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "docs-trials",
+  "main": "src/worker.ts",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/health"],
+  },
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI",
+  },
+  "browser": {
+    "binding": "BROWSER",
+  },
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TrialCodingAgent",
+        "class_name": "TrialCodingAgent",
+      },
+      {
+        "name": "Sandbox",
+        "class_name": "Sandbox",
+      },
+      {
+        "name": "RunAdmission",
+        "class_name": "RunAdmission",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["TrialCodingAgent", "Sandbox"],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["RunAdmission"],
+    },
+  ],
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "instance_type": "lite",
+      "max_instances": 2,
+    },
+  ],
+  "workflows": [
+    {
+      "name": "docs-trials",
+      "binding": "TRIAL_WORKFLOW",
+      "class_name": "TrialWorkflow",
+    },
+  ],
+  "artifacts": [
+    {
+      "binding": "ARTIFACTS",
+      "namespace": "docs-trials",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+}

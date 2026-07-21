@@ -1,0 +1,55 @@
+{
+  "name": "docs-trials",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "vite build && pnpm smoke:starter:build && wrangler deploy --dry-run --containers-rollout=none",
+    "dev": "vite build --watch",
+    "dev:local": "vite build && wrangler dev --config wrangler.local.jsonc --port 8787",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "smoke:starter:build": "pnpm --dir fixtures/updates-filter-starter build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "trial:local": "tsx scripts/run-local-trial.ts",
+    "trial:local:prepare": "tsx scripts/local-agent-run.ts prepare",
+    "trial:local:capture": "tsx scripts/local-agent-run.ts capture",
+    "trial:local:view": "tsx scripts/serve-local-report.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cloudflare/codemode": "^0.4.3",
+    "@cloudflare/kumo": "^2.8.0",
+    "@cloudflare/playwright": "^1.3.0",
+    "@cloudflare/sandbox": "^0.12.3",
+    "@cloudflare/think": "^0.13.0",
+    "agents": "^0.17.4",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@cloudflare/workers-types": "^5.20260710.1",
+    "@cloudflare/vite-plugin": "^1.45.0",
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.7.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.47.0",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.16",
+    "wrangler": "^4.111.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "local-runner-fixture",
+  "title": "Local runner fixture",
+  "task": "Build a small web application from the supplied documentation.",
+  "documents": [
+    {
+      "label": "Example documentation",
+      "kind": "markdown",
+      "value": "# Example\n\nBuild the documented application."
+    }
+  ],
+  "starter": { "type": "workspace", "value": "." },
+  "verification": {
+    "profile": "web-app",
+    "criteria": [
+      "Application installs and builds",
+      "Preview starts and can be opened in a browser"
+    ],
+    "command": "node --version"
+  },
+  "agent": { "name": "fixture agent", "model": "fixture-model" }
+}

@@ -1,0 +1,9 @@
+# Copy to .dev.vars for local Workers development. Never commit real values.
+CF_ACCOUNT_ID=
+CF_API_TOKEN=
+AI_GATEWAY_URL=
+ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
+ACCESS_AUD=
+REALTIMEKIT_AUTH_ENDPOINT=
+REALTIMEKIT_ROOM_NAME=docs-trials-test
+ARTIFACTS_NAMESPACE=docs-trials
