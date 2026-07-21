@@ -1,0 +1,101 @@
+LICENSE
+  s_11032c9acd5e07::t_658cb150416f90 189
+eslint.config.js
+  s_126df0ede13bba::t_79780e00e9ab36 1-7
+fixtures/updates-filter-starter/README.md
+  s_126df0ede13bba::t_a08f7e94d64864 1-5
+fixtures/updates-filter-starter/index.html
+  s_126df0ede13bba::t_e4ae7af7015505 1-12
+fixtures/updates-filter-starter/package.json
+  s_126df0ede13bba::t_d5ee53e50619c5 1-17
+fixtures/updates-filter-starter/pnpm-lock.yaml
+  s_7a8d6c352bd740::t_1f9863d4b5cfcd 1-1435
+fixtures/updates-filter-starter/pnpm-workspace.yaml
+  s_126df0ede13bba::t_8549cbf3b79046 1-5
+fixtures/updates-filter-starter/src/App.jsx
+  s_126df0ede13bba::t_e55456233cb248 1-9
+fixtures/updates-filter-starter/src/main.jsx
+  s_126df0ede13bba::t_13802b9963c724 1-10
+fixtures/updates-filter-starter/src/styles.css
+  s_126df0ede13bba::t_b547fe1f2d92d9 1-21
+fixtures/updates-filter-starter/vite.config.js
+  s_126df0ede13bba::t_81ae8739535050 1-6
+pnpm-lock.yaml
+  s_7d0f1b501d0150::t_53e82024ac906e 1-9099
+pnpm-workspace.yaml
+  s_7d0f1b501d0150::t_d06d5c30e05982 1-7
+research/competitive-landscape.md
+  s_7d0f1b501d0150::t_50b2db7720f754 1-29
+research/platform-capabilities.md
+  s_d447eca85eac1b::t_d5810b06a21351 1-139
+scripts/run-local-trial.ts
+  s_7d0f1b501d0150::t_789cd24de2da0c 1-40
+scripts/serve-local-report.ts
+  s_b1964cf0d2321f::t_c9e4c5ad8a9774 1-59
+src/access-auth.ts
+  s_7a8d6c352bd740::t_f8b6bbee9b4893 1-112
+src/domain.ts
+  s_7a8d6c352bd740::t_44e858091670a7 1-117
+src/local-agent-runner.ts
+  s_7a8d6c352bd740::t_e49574e7e47dff 1-225
+tests/domain.test.ts
+  s_7a8d6c352bd740::t_77fed0bc864414 1-99
+ui/src.tsx
+  s_7a8d6c352bd740::t_ed87dfd6b349bf 1-867
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "af09d9e46d9ea8a2dde09a7a056cd03ed04a96fc",
+  "prompts": {},
+  "sessions": {
+    "s_11032c9acd5e07": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0940ec0d6ffedE6g4yVOSlkUa2",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_126df0ede13bba": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_07fc19b19ffeAEYd7X6Gs7FbI9",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_7a8d6c352bd740": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_07fc7fdeaffe0LdJcTZ0jos6oJ",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_7d0f1b501d0150": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_092ffb46effer0lA3x1sZMcmpC",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_b1964cf0d2321f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_08e0a66d0ffeicMLOYjvDYqsTF",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_d447eca85eac1b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_07a85bb16ffeG5LUBzwbir6x4k",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
