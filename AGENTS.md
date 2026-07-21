@@ -25,7 +25,7 @@ Build an open-source platform that determines whether a coding agent can success
 - Test the documentation and developer resources, not an LLM's ability to guess from prior knowledge.
 - The coding agent may access only the resources assigned to that trial variant.
 - Do not preload an entire documentation corpus into the agent context.
-- Prefer deterministic graders. An analysis model may explain results, but may not decide pass/fail alone.
+- Prefer deterministic graders. An analysis model may explain results, but may not decide the authoritative outcome.
 - Capture the evidence chain: source revision, resources exposed, prompts, agent actions, generated source, command output, browser evidence, and grader results.
 - Never expose persistent customer credentials to generated client code or trial artifacts.
 - A user defines the task to test. Workers AI may suggest a task and
@@ -33,7 +33,7 @@ Build an open-source platform that determines whether a coding agent can success
   frozen manifest before execution.
 - Reports distinguish deterministic verification from advisory AI diagnosis.
   The diagnostic must cite redacted evidence, state confidence, and never
-  change the pass/fail result.
+  change the `passed`, `failed`, or `inconclusive` result.
 - Keep the first self-serve verification profile narrow: web applications with
   browser-visible acceptance criteria. CLI, server, and connected-integration
   profiles follow after the end-to-end local path works.
@@ -82,9 +82,9 @@ When implementation changes a fixed decision, add an ADR instead of silently cha
 3. Read `.claude/conventions.md` for naming and placement rules when that file exists.
 4. If you are about to create the 10th or later file in a flat directory, propose reorganization first.
 
-## Intended Validation
+## Validation
 
-Commands will be defined after scaffolding. The baseline expectation is:
+The established validation commands are:
 
 ```txt
 pnpm lint

@@ -4,6 +4,13 @@
 
 Accepted
 
+## Current Note
+
+ADR 0005 subsequently added executable custom local manifests through the
+agent-neutral runner. Custom drafts still do not execute in the controlled
+cloud path, and browser-only local criteria remain inconclusive until the local
+Playwright verifier is implemented.
+
 ## Context
 
 Docs Trials should let visitors evaluate documentation beyond the curated
@@ -23,15 +30,16 @@ Markdown, public documentation URLs, a Docs Trials starter template, or a
 repository URL. The UI validates the minimum inputs but does not persist or
 execute custom drafts yet.
 
-The curated RealtimeKit baseline remains the only executable trial path while
-the real controlled-agent workflow is completed. Custom execution will require
-authentication, a per-run budget, a validated schema, a sandbox network
-policy, and deterministic acceptance checks.
+The curated RealtimeKit baseline remains the only planned executable
+controlled-cloud trial while that workflow is completed. Custom cloud execution
+requires authentication, a per-run budget, a validated schema, a sandbox
+network policy, and deterministic acceptance checks. ADR 0005 separately
+permits custom local execution.
 
 ## Consequences
 
 - Visitors can see the intended self-serve authoring model immediately.
 - The product does not imply that arbitrary drafts have been evaluated.
 - Custom documents and repository URLs are not retained by the MVP UI.
-- ADR 0002 remains true for executable trials and will be superseded when
-  custom execution is implemented.
+- ADR 0002 remains true for controlled-cloud trials and will be superseded when
+  custom cloud execution is implemented.

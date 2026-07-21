@@ -8,7 +8,10 @@ Docs Trials should feel like a forensic engineering workbench, not a generic AI 
 
 ### Trial Catalog
 
-The initial screen lists curated trials. The RealtimeKit video-room trial is the only active entry in the first build.
+The initial screen lists curated trials. The RealtimeKit video-room trial is the
+featured controlled-cloud target, not a currently executable cloud run. The
+workbench also exposes local synthetic previews and browser-only custom drafts;
+agent-neutral local execution is handled by the local runner.
 
 Show:
 
@@ -73,5 +76,5 @@ Do not call a comparison causal when the task, model, runtime, or resource revis
 
 - Preserve a text-first timeline and report independent of recordings or screenshots.
 - Provide accessible names and states for run phases and criterion results.
-- Do not communicate pass/fail through color alone.
+- Do not communicate `passed`, `failed`, or `inconclusive` through color alone.
 - Treat the AX report as a first-class accessible artifact.

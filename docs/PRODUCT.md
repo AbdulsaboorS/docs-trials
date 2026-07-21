@@ -8,7 +8,16 @@ Existing documentation assessments often measure structural properties such as M
 
 ## Product Definition
 
-Docs Trials gives a controlled coding agent a real developer task and only the documentation resources selected for the trial. The platform runs the generated application in an isolated environment, validates it with deterministic checks and browser automation, and produces an evidence-backed report.
+Docs Trials freezes a real developer task and the exact documentation resources
+selected for its trial. It supports two execution modes:
+
+- a controlled cloud agent and isolated runtime for reproducible comparisons;
+- an agent-neutral local runner that wraps a user's existing coding agent and
+  keeps inputs, generated source, evidence, and reports in their workspace.
+
+Both modes use deterministic checks and produce an evidence-backed report. The
+local mode is the first self-serve release; controlled cloud execution requires
+authenticated admission, fixed budgets, and evidence lifecycle controls.
 
 The central unit is a **trial**:
 
@@ -60,7 +69,8 @@ The MVP implements integration only.
 
 The first product metric is trial completion quality, not page views:
 
-- deterministic pass rate across repeated runs;
+- deterministic `passed`, `failed`, and `inconclusive` rates across repeated
+  runs;
 - time to verified result;
 - number and type of failed attempts;
 - number of human interventions;

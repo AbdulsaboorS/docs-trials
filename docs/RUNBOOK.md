@@ -16,8 +16,24 @@ validation does not require Docker. A real deployment must build and roll out
 the pinned Sandbox container in `Dockerfile`; do not use that flag for the live
 Sandbox validation.
 
-`pnpm trial:local` writes a complete deterministic evidence package to
-`trial-output/<run-id>/`. It does not contact Cloudflare or RealtimeKit.
+`pnpm trial:local` writes a canonical synthetic evidence package to
+`trial-output/<run-id>/`. It tests the evidence and report contract without a
+real coding agent, Cloudflare service, or RealtimeKit call.
+
+## Agent-Neutral Local Runner
+
+To capture a real external-agent run in the user's workspace:
+
+```sh
+pnpm trial:local:prepare -- --manifest trial.manifest.json --workspace .
+pnpm trial:local:capture -- --run .docs-trials/runs/<run-id> --workspace .
+pnpm trial:local:view -- .docs-trials/runs/<run-id>
+```
+
+Give the generated `AGENT_INSTRUCTIONS.md` to the user's coding agent between
+`prepare` and `capture`. This path records the verification command and source
+diff. Browser-only criteria remain `inconclusive` until the local Playwright
+verifier is implemented. See [`LOCAL_RUNNER.md`](LOCAL_RUNNER.md).
 
 ## Local Workbench Preview
 
@@ -33,41 +49,49 @@ The curated trial's **Run local evidence** action remains fully local and does
 not invoke Think, Sandbox, Browser Run, or RealtimeKit. Its output is explicitly
 labeled as a synthetic report preview, not a completed documentation trial.
 
-## Deploy Prerequisites
+## Current Release Path
+
+Before private cloud validation:
+
+1. Complete a manual acceptance pass through the local workbench.
+2. Add deterministic local Playwright verification so browser-visible criteria
+   no longer default to `inconclusive`.
+3. Connect the workbench to the agent-neutral local runner.
+4. Add CI and package an installable local CLI.
+
+These are the local-beta release steps. The cloud controls below do not block
+anonymous local runs.
+
+## Deferred Private-Cloud Deployment
 
 The deployment uses one Cloudflare Worker with AI, Browser Run, Worker Loader,
 Sandbox, Workflow, and Artifacts bindings. It requires a Workers Paid account
-because Sandbox uses Dynamic Workers and Artifacts is beta-gated.
+because Sandbox uses Dynamic Workers and Artifacts is beta-gated. The current
+account is Workers Paid and Artifacts entitlement is confirmed, but no Worker
+has been deployed.
 
-1. Upgrade the deployment account to Workers Paid.
+1. Approve exact monetary and rate limits and review every ADR 0007 gate.
 2. Authenticate Wrangler with an account that has Workers, AI, Browser, and
    Artifacts write permissions.
-3. Before returning to the connected RealtimeKit trial, set its non-persistent
-   auth values:
-
-```sh
-pnpm exec wrangler secret put REALTIMEKIT_AUTH_ENDPOINT
-pnpm exec wrangler secret put REALTIMEKIT_ROOM_NAME
-```
-
-The no-credential smoke trial obtains its preview URL directly from its own
-Sandbox quick tunnel. It has no public grader endpoint, and Browser Run blocks
-runtime requests to every other origin.
-
-4. Deploy:
+3. Deploy only with public cloud execution routes still disabled:
 
 ```sh
 pnpm build
 pnpm exec wrangler deploy
 ```
 
-## Live Checks
+The no-credential smoke trial obtains its preview URL directly from its own
+Sandbox quick tunnel. It has no public grader endpoint, and Browser Run blocks
+runtime requests to every other origin.
 
-Controlled cloud execution is currently disabled in the Worker. Artifacts API
-entitlement and standalone Git behavior are confirmed, but the run and grader
-routes must continue returning `503` until the prepared binding persistence path
-and ADR 0007's authentication, admission, budget, cancellation, authenticated
-read, and retention controls are live-validated.
+## Private Live Checks
+
+Public cloud execution is disabled in the Worker. Artifacts API entitlement and
+standalone Git behavior are confirmed, but public run and grader routes must
+continue returning `503` while an Access-protected internal route privately
+validates the application persistence adapter and ADR 0007's authentication,
+admission, budget, cancellation, authenticated read, and retention controls
+under the approved budget.
 
 After a safe deployment, open the Worker URL to load the Kumo dashboard and
 check the account configuration:
@@ -90,9 +114,20 @@ curl -X POST https://<worker-url>/api/grade/realtimekit \
   --data '{"previewUrl":"https://preview.example.workers.dev"}'
 ```
 
-Both requests must return `503`. Replace these checks with authenticated live
-procedures only after ADR 0007 is implemented and reviewed.
+Both requests must return `503`. Add an Access-protected internal validation
+route only after the controls, persistence adapter, cleanup, and retention
+behavior are ready for private live validation. Public routes remain disabled.
 
 The prepared Access validator requires `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`.
 It accepts any identity authorized by the Access application; there is no
-application-level email allowlist. These settings do not enable cloud routes.
+application-level email allowlist. These settings do not enable public routes.
+
+## RealtimeKit Validation
+
+Only after two repeatable `updates-filter-smoke-v1` runs pass the private checks,
+set the RealtimeKit trial's non-persistent auth values:
+
+```sh
+pnpm exec wrangler secret put REALTIMEKIT_AUTH_ENDPOINT
+pnpm exec wrangler secret put REALTIMEKIT_ROOM_NAME
+```

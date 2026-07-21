@@ -4,6 +4,19 @@
 
 Build the narrowest path that creates a real report. Do not start with a polished dashboard, multi-agent system, or generalized plugin framework.
 
+## Current Milestone: Local Beta
+
+Phases 0 through 3 are complete. The controlled integration in Phase 4 is
+prepared but has not been deployed or live-tested. The current release sequence
+is:
+
+1. manually accept the local workbench;
+2. add deterministic local Playwright verification;
+3. connect the workbench and agent-neutral runner;
+4. add CI and package an installable CLI;
+5. privately validate the disabled-route cloud path only after exact budget
+   approval and ADR 0007 gate review.
+
 ## Phase 0: Verify External Interfaces
 
 Before adding product code, retrieve current documentation and capture a dated note for:
@@ -79,20 +92,32 @@ results. Artifacts repository creation, versioned file mutation, and
 control-plane deletion are confirmed by a standalone live spike. Binding-driven
 Workflow persistence and the wider cloud path remain unvalidated.
 
-## Phase 5: Browser Verification
+## Phase 5: Agent-Neutral Local Beta
 
-Implement the RealtimeKit two-participant Browser Run grader. Treat each acceptance criterion in [`MVP.md`](MVP.md) as an independently reported result. Persist recording and screenshot references with redaction-aware metadata.
+Implement deterministic Playwright checks for the first local web-application
+profile. Integrate the runner with the existing Kumo workbench, add CI for the
+established validation commands, and package an installable CLI. Local reports
+must continue to disclose agent/model metadata and keep all user inputs and
+evidence in the workspace.
 
-## Phase 6: Durable Orchestration And Evidence Storage
+## Phase 6: Private Cloud Validation
 
-Move phase execution into Workflows and persist complete trial packages in Artifacts after confirming current access and API shape. Add resumability and idempotency only where an actual restart boundary requires it.
+The prepared Workflow and Artifacts adapter compile behind disabled endpoints.
+Under an approved exact budget, deploy with public run and grader routes still
+returning `503`, then live-test binding-driven persistence, retries,
+cancellation, cleanup, authenticated reads, retention, and physical purge.
 
-Before exposing run creation, enforce the admission, budget, cancellation, and
-retention gates in [ADR 0007](decisions/0007-cloud-run-admission-controls.md).
+Before exposing any run creation, enforce every admission, budget,
+cancellation, and retention gate in
+[ADR 0007](decisions/0007-cloud-run-admission-controls.md).
 
-## Phase 7: Dashboard
+## Phase 7: RealtimeKit Browser Verification
 
-Implement the catalog, run setup, live timeline, and report screens using Kumo and Tailwind v4. The UI should consume the same events and report files produced by the headless path.
+Implement and privately validate the RealtimeKit two-participant Browser Run
+grader. Treat each acceptance criterion in [`MVP.md`](MVP.md) as an
+independently reported result. Persist only evidence allowed by the frozen
+retention policy; browser recording remains disabled unless that policy is
+deliberately changed.
 
 ## Phase 8: Comparison Variant
 

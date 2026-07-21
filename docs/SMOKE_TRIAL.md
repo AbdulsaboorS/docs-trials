@@ -3,9 +3,9 @@
 ## Purpose
 
 `updates-filter-smoke-v1` is the first no-credential task for validating the
-controlled cloud pipeline. It proves that Docs Trials can move one frozen task
-through Think, Sandbox, Browser Run, Workflows, Artifacts, and AX.md reporting
-before RealtimeKit adds authentication and media complexity.
+controlled cloud pipeline. It is designed to prove that Docs Trials can move
+one frozen task through Think, Sandbox, Browser Run, Workflows, Artifacts, and
+AX.md reporting before RealtimeKit adds authentication and media complexity.
 
 This is an internal platform test. Its result must not be presented as a score
 or finding about React's documentation.
@@ -51,8 +51,11 @@ the page's visual style.
 - criterion-level results and aggregate outcome;
 - rendered `AX.md`.
 
-No cloud execution occurs until Artifacts access and ADR 0007's admission
-controls are live-validated.
+Public cloud execution remains disabled. After exact budget approval and review
+of ADR 0007's implemented controls, an Access-protected internal route may run
+this smoke task to privately validate the application persistence adapter and
+lifecycle behavior. Artifacts entitlement and standalone Git behavior are
+already confirmed.
 
 ## Prepared Implementation
 
@@ -72,7 +75,9 @@ The disabled cloud path now compiles the following integration:
 - Workflow termination, Think cancellation, Sandbox destruction, and admission
   release only after resource cleanup succeeds.
 
-Artifact package contents are intentionally discarded after their manifest is
-validated. API entitlement is confirmed, but no cloud evidence is saved until
-the real adapter passes namespace, repository, versioned-write, read, and
-deletion tests.
+The prepared implementation saves the redacted package through the Artifacts
+binding and a separate credential-isolated Git Sandbox. It has not saved a live
+application package because the Worker has not been deployed. Before enabling
+public cloud execution, use the private smoke path to live-test idempotent save
+and read behavior, revision verification, stale-token cleanup, cancellation
+cleanup, retention, and physical purge semantics.

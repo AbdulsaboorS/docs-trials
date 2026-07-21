@@ -1,21 +1,21 @@
-# Platform Capabilities To Verify
+# Platform Capabilities
 
 ## Status
 
-Retrieved 2026-07-20. These findings identify the narrow APIs needed for the
-first implementation; they are not a replacement for each product's reference
-documentation.
+Retrieved 2026-07-20 through 2026-07-21. These findings identify the narrow APIs
+needed for the first implementation; they are not a replacement for each
+product's reference documentation.
 
 | Capability          | Status                                           | Intended use                            | Confirmed interface or constraint                                                                                                                                                                                                                                                                                |
 | ------------------- | ------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@cloudflare/think` | confirmed, integration work needed               | Controlled coding-agent harness         | Think supports turn-level tool restrictions, tool-call interception, bounded steps, and idempotent programmatic submissions. Its built-in bash workspace has no network by default. A Linux Sandbox must be exposed through a custom tool; there is no documented ready-made Think-to-Sandbox coding adapter.    |
+| `@cloudflare/think` | confirmed, prepared path not deployed            | Controlled coding-agent harness         | Think supports turn-level tool restrictions, tool-call interception, bounded steps, and idempotent programmatic submissions. Its built-in bash workspace has no network by default. A Linux Sandbox must be exposed through a custom tool; there is no documented ready-made Think-to-Sandbox coding adapter.    |
 | Agents SDK          | confirmed                                        | Persistent agent state and UI streaming | Agents run on Durable Objects and provide durable identity, state, WebSockets, sessions, and Workflow integration. Keep event payloads small; stream logs as events instead of replacing full state.                                                                                                             |
 | Sandbox SDK         | confirmed, deployment spike needed               | Isolated code execution and preview     | Current configuration requires a Container entry, matching Durable Object binding/migration, and Sandbox export. Use RPC transport, explicit sessions, absolute file paths, bounded `exec()`, process cleanup, and `destroy()`. Current preview guidance uses Sandbox tunnels; `exposePort()` is being removed.  |
 | Browser Run         | confirmed with spike required                    | Browser verification                    | `@cloudflare/playwright` supports sessions, pages, screenshots, tracing, and beta rrweb session recording. Recordings are not native video and are available after session closure. Close launched sessions in `finally`; verify media-device behavior separately before RealtimeKit grading.                    |
 | Artifacts           | live Git path confirmed; purge semantics unknown | Versioned trial package storage         | A live disposable repo confirmed implicit namespace creation, scoped read/write tokens, Git clone/push, two-revision history, prior-revision reads, and immediate control-plane deletion. Repo metadata did not reflect successful pushes, and physical purge/token invalidation after deletion remain unproven. |
 | Workflows           | confirmed                                        | Durable trial phases                    | Put durable work inside awaited `step.do()` calls, keep deterministic step names, and return structured-cloneable values under 1 MiB. Steps may execute more than once, so every external write needs its own idempotency key/check. Runtime inputs still require schema validation.                             |
 | AI Gateway          | confirmed                                        | Model tracing and cost controls         | AI Gateway provides provider routing and request observability. Model requests must include a run correlation ID and must never persist credentials in trial evidence.                                                                                                                                           |
-| Kumo                | confirmed, registry access required              | Interface primitives                    | `@cloudflare/kumo` is React and Tailwind based. Its documented installation requires Cloudflare's private npm registry; do not make dashboard build mandatory until registry access is configured.                                                                                                               |
+| Kumo                | confirmed and integrated                         | Interface primitives                    | `@cloudflare/kumo` is React and Tailwind based. The current workbench installs and builds it successfully. Fresh environments may still need the documented Cloudflare registry configuration; the headless trial path does not depend on the dashboard.                                                         |
 | Tailwind CSS v4     | confirmed                                        | Styling                                 | Tailwind v4 is compatible with the React dashboard build. Use semantic Kumo tokens when Kumo is available.                                                                                                                                                                                                       |
 
 ## Sources
@@ -35,11 +35,13 @@ documentation.
 ## Implementation Decisions
 
 - Local evidence packages remain authoritative for local development and CI,
-  but they are not a storage substitute for controlled cloud runs. Cloud
-  execution stays disabled until binding-driven Artifacts persistence and ADR
-  0007's remaining controls are live-validated.
+  but they are not a storage substitute for controlled cloud runs. Public cloud
+  execution remains disabled. After exact budget approval, a future
+  Access-protected internal route will validate binding-driven Artifacts
+  persistence and ADR 0007's remaining controls.
 - Browser Run decides browser acceptance criteria in code. A session recording is evidence, not a grading mechanism.
-- The first dashboard uses the same report JSON served by the Worker. Kumo is loaded only when its private registry is available; the headless trial path must not depend on it.
+- The workbench uses the same report JSON served by the Worker and currently
+  builds with Kumo. The headless trial path does not depend on the dashboard.
 - A deployment spike must verify Sandbox preview proxying, two isolated browser contexts, and the media substitute before a RealtimeKit run can be considered valid.
 - A paid-account deployment was retried on 2026-07-20 with account
   `be19a16e5d1b66ff19c4e9a90096344e`. Assets uploaded, but Worker deployment

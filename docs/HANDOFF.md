@@ -92,11 +92,11 @@ Workflow, or Artifacts validation. The local configuration intentionally omits
 Artifacts. Cloud run and grader routes still return `503`, and no cloud
 deployment or paid run occurred in this session.
 
-The remaining release gates include a live test of the prepared persistence
-adapter, exact monetary/rate controls, live cleanup and cancellation races,
-Workflow/Think/Artifact retention deletion, physical purge confirmation,
+The remaining cloud-enablement gates include a live test of the prepared
+persistence adapter, exact monetary/rate controls, live cleanup and cancellation
+races, Workflow/Think/Artifact retention deletion, physical purge confirmation,
 authenticated evidence reads, Access and admission behavior, and two repeatable
-frozen smoke runs.
+frozen smoke runs. They do not block the local-first beta.
 
 ## Current Product Direction
 
@@ -109,9 +109,9 @@ frozen smoke runs.
   coding agent.
 - Anonymous users run locally; reports render in a local viewer and download
   as `AX.md`, JSON, and redacted evidence. No anonymous cloud persistence.
-- Deterministic verification owns pass/fail. AI diagnostics provide
-  evidence-linked documentation recommendations with confidence and cannot
-  alter that outcome.
+- Deterministic verification owns the `passed`, `failed`, or `inconclusive`
+  outcome. AI diagnostics provide evidence-linked documentation recommendations
+  with confidence and cannot alter it.
 - The local runner currently captures an explicit verification command and
   source diff. Browser-only criteria remain `inconclusive` until a local
   browser verifier is implemented; do not interpret that state as a docs
@@ -121,23 +121,24 @@ frozen smoke runs.
 
 ## Resume Steps
 
-1. Review and deploy the disabled-route Worker only after approving expected
-   paid Sandbox/container usage. Do not enable public run or grader routes.
-2. Live-test one package save through the binding, clean persistence Sandbox,
-   Git revision verification, stale-token cleanup, and cancellation cleanup.
-3. Implement and test the seven-day retention scheduler/index plus authenticated
-   evidence reads. Confirm physical purge semantics rather than inferring them
-   from immediate `10200` responses.
-4. Review ADR 0007 enforcement and approve exact spending/rate controls, then
-   live-test Access, admission, Think, Sandbox, Browser Run, cancellation, and
-   cleanup while public cloud routes remain disabled.
-5. Run the frozen smoke trial twice before returning to RealtimeKit.
-6. Keep the frontend and agent-neutral local runner parked unless required by
-   the controlled cloud path.
+1. Have the user complete a short manual acceptance pass through the local
+   workbench. The health endpoint was verified, but this UX pass is still
+   pending.
+2. Implement deterministic local Playwright verification for the first narrow
+   web-application profile so browser-visible criteria no longer default to
+   `inconclusive`.
+3. Connect the workbench to the agent-neutral local runner, add CI for the
+   established validation commands, and package an installable CLI.
+4. Correct issues found by local acceptance and prepare the `v0.1.0` local beta
+   before spending on private cloud validation.
+5. Only after exact budget approval and ADR 0007 gate review, deploy with public
+   cloud routes disabled and live-test persistence, retention, Access,
+   admission, cancellation, and cleanup.
+6. Run `updates-filter-smoke-v1` twice before returning to RealtimeKit.
 
 ## Worktree
 
-The baseline is committed and pushed to
-`https://github.com/AbdulsaboorS/docs-trials` at `af09d9e`. The current branch
-adds the prepared Artifacts persistence path on top of that baseline. Do not
-discard or reset existing changes.
+Before this documentation handoff, local and GitHub `main` were synchronized at
+`debccd2` (`Persist cloud trial evidence in Artifacts`). The handoff and stale
+documentation cleanup are uncommitted working-tree changes and contain no
+application-source edits. Do not discard unrelated concurrent changes.

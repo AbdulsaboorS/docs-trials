@@ -2,7 +2,9 @@
 
 ## Guiding Principle
 
-Separate execution, verification, explanation, and presentation. A model can make code changes and explain failures, but deterministic systems own the authoritative evidence and pass/fail decision.
+Separate execution, verification, explanation, and presentation. A model can
+make code changes and explain failures, but deterministic systems own the
+authoritative evidence and three-state outcome.
 
 ## Target Components
 
@@ -75,7 +77,12 @@ Sandbox executes untrusted generated code, dependency installation, builds, and 
 
 ### Browser Run Grader
 
-Browser Run owns browser-side verification. It opens independent participant contexts, performs the defined task flow, captures screenshots and a session recording, and produces structured evidence. The grader is code, not a free-form model prompt.
+Browser Run owns browser-side verification. It opens independent participant
+contexts, performs the defined task flow, captures bounded screenshots plus
+console and network summaries, and produces structured evidence. A recording
+reference is optional only when the frozen retention policy permits it; the
+current prototype disables recording. The grader is code, not a free-form model
+prompt.
 
 ### Artifacts
 
@@ -92,7 +99,7 @@ TrialSpec       Immutable task definition and resource variant
 TrialRun        One execution of a TrialSpec
 TrialEvent      Append-only phase, tool, command, and grader event
 Evidence        Structured pointer or embedded redacted output
-GraderResult    Criterion-level pass/fail with evidence references
+GraderResult    Criterion-level three-state outcome with evidence references
 AXReport        Derived human-readable report for a TrialRun
 ```
 
@@ -117,10 +124,11 @@ inconclusive run. See [ADR 0006](decisions/0006-three-state-grader-outcomes.md).
   allowlist. The prototype policy permits one active run per identity and uses
   a seven-day evidence-retention target.
 
-## Decisions Deferred Until Retrieval
+## Remaining Live-Validation Questions
 
-- Exact Think API and integration shape.
-- Whether a Durable Object is required in the first vertical slice.
-- Artifacts API availability and repository layout.
-- Browser Run multi-context/session capabilities and media-device controls.
-- Kumo's recommended application integration and component APIs.
+- Deployed Think-to-Sandbox behavior, cancellation, and cleanup races.
+- Sandbox container rollout, preview tunnels, and lifecycle behavior.
+- Browser Run multi-context behavior and media-device controls for RealtimeKit.
+- Binding-driven Artifacts persistence, retention, token cleanup, and physical
+  purge semantics.
+- End-to-end Workflow retry and idempotency behavior across those services.

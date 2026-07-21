@@ -2,13 +2,16 @@
 
 ## Goal
 
-Prove the complete Docs Trials loop with one curated integration task and one resource variant. The output must be a reproducible pass/fail result and an `AX.md` report.
+Prove the complete Docs Trials loop with one curated integration task and one
+resource variant. The output must be a reproducible `passed`, `failed`, or
+`inconclusive` result and an `AX.md` report.
 
 Before introducing RealtimeKit credentials and media behavior, the controlled
-cloud path uses the internal `updates-filter-smoke-v1` fixture. That fixture
-proves Think, Sandbox, Browser Run, Workflows, Artifacts, and reporting with a
-small no-credential React task. It validates the platform and must not be
-presented as a documentation-quality finding.
+cloud path will first use the internal `updates-filter-smoke-v1` fixture. That
+fixture is designed to validate Think, Sandbox, Browser Run, Workflows,
+Artifacts, and reporting with a small no-credential React task. It has not run
+through the complete cloud path and must never be presented as a
+documentation-quality finding.
 
 ## Task
 
@@ -69,11 +72,12 @@ The first grader must evaluate the following criteria. Exact selectors, endpoint
 - Cross-browser matrix.
 - Product scalability or load testing.
 - Automatic remediation patches.
-- Arbitrary user-authored tasks.
+- Arbitrary user-authored controlled-cloud tasks. User-authored local manifests
+  are supported by the agent-neutral runner.
 
 ## Required Outputs
 
-Every completed or failed trial must emit:
+Every terminal trial must emit all evidence available for its outcome:
 
 ```txt
 trial.json            Frozen task, resources, versions, and run configuration
