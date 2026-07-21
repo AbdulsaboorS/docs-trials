@@ -1,7 +1,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 import { z } from "zod";
-import { assembleTrialArtifactPackage } from "./artifacts";
+import { artifactRepositoryForEnv, assembleTrialArtifactPackage } from "./artifacts";
 import { gradeUpdatesFilterPage } from "./browser-grader";
 import {
   createSmokeGraderResults,
@@ -16,6 +16,7 @@ import {
   type Evidence,
   type GraderResult,
   type TrialEvent,
+  type TrialRun,
 } from "./domain";
 import { updatesFilterSmokeTrial } from "./fixture";
 import type { PlatformEnv } from "./platform-env";
@@ -39,6 +40,8 @@ import {
   submitControlledTask,
 } from "./trial-agent-client";
 import { renderAXReport } from "./report";
+
+const maxWorkflowTraceBytes = 750_000;
 
 export const trialWorkflowInputSchema = z.object({
   runId: runIdSchema,
@@ -82,8 +85,20 @@ export class TrialWorkflow extends WorkflowEntrypoint<PlatformEnv, TrialWorkflow
       );
       submissionId = submitted.submissionId;
       const agent = await this.waitForAgent(step, input, submitted.submissionId);
-      const agentTranscript = await step.do("collect-agent-trace", { timeout: "1 minute" }, () =>
-        collectControlledTaskTrace(this.env, input.runId),
+      const agentTranscript = await step.do(
+        "collect-agent-trace",
+        { timeout: "1 minute" },
+        async () => {
+          const messages = JSON.stringify(
+            redactValue(JSON.parse(await collectControlledTaskTrace(this.env, input.runId))),
+          );
+          if (new TextEncoder().encode(messages).byteLength > maxWorkflowTraceBytes) {
+            throw new NonRetryableError(
+              "Redacted agent trace exceeded the Workflow evidence limit.",
+            );
+          }
+          return messages;
+        },
       );
       const agentTrace = { submission: agent, messages: JSON.parse(agentTranscript) as unknown };
 
@@ -181,14 +196,16 @@ export class TrialWorkflow extends WorkflowEntrypoint<PlatformEnv, TrialWorkflow
         },
       );
 
-      output = await step.do("report", { timeout: "2 minutes" }, async () => {
+      const completedAt = await step.do("freeze-completed-at", async () =>
+        new Date().toISOString(),
+      );
+      output = await step.do("report", { timeout: "4 minutes" }, async () => {
         await this.assertNotCancelled(input);
-        const now = new Date().toISOString();
         const graderResults = createSmokeGraderResults(build, preview, browser);
-        const events = createEvents(input.admittedAt, now, agent, build, preview);
+        const events = createEvents(input.admittedAt, completedAt, agent, build, preview);
         const evidence = createEvidence(
           input,
-          now,
+          completedAt,
           agentTrace,
           build,
           preview,
@@ -200,7 +217,7 @@ export class TrialWorkflow extends WorkflowEntrypoint<PlatformEnv, TrialWorkflow
           id: input.runId,
           specId: spec.id,
           startedAt: input.admittedAt,
-          completedAt: now,
+          completedAt,
           status: outcome,
           events,
           evidence,
@@ -208,7 +225,7 @@ export class TrialWorkflow extends WorkflowEntrypoint<PlatformEnv, TrialWorkflow
         });
         const report = renderAXReport(spec, run, {
           evidenceMode:
-            "Prepared controlled-cloud run. Artifact contents were assembled but not persisted because Artifacts access is disabled.",
+            "Controlled-cloud run with a redacted evidence package persisted to versioned Artifacts storage.",
         });
         const generatedSource = await collectGeneratedSource(this.env, input.runId, input.limits);
         const artifactPackage = assembleTrialArtifactPackage({
@@ -228,10 +245,19 @@ export class TrialWorkflow extends WorkflowEntrypoint<PlatformEnv, TrialWorkflow
           ...(browser.screenshot ? { screenshot: browser.screenshot } : {}),
           maxBytes: input.limits.maxEvidenceBytes,
         });
-        return {
-          run,
+        const artifactRepository = artifactRepositoryForEnv(this.env);
+        const artifact = await artifactRepository.save(artifactPackage);
+        try {
+          await this.assertNotCancelled(input);
+        } catch (error) {
+          await artifactRepository.delete(artifact.repository);
+          throw error;
+        }
+        const workflowOutput = {
+          run: compactWorkflowRun(run, artifact),
           report,
-          persistence: "blocked" as const,
+          persistence: "stored" as const,
+          artifact,
           retentionExpiresAt: input.retentionExpiresAt,
           artifactManifest: artifactPackage.files.map((file) => ({
             path: file.path,
@@ -242,6 +268,11 @@ export class TrialWorkflow extends WorkflowEntrypoint<PlatformEnv, TrialWorkflow
                 : file.content.byteLength,
           })),
         };
+        if (new TextEncoder().encode(JSON.stringify(workflowOutput)).byteLength > 900_000) {
+          await artifactRepository.delete(artifact.repository);
+          throw new NonRetryableError("Controlled run output exceeded the Workflow result limit.");
+        }
+        return workflowOutput;
       });
     } finally {
       await step.do(
@@ -377,8 +408,16 @@ function createEvidence(
   browser: BrowserGrade,
   graderResults: GraderResult[],
 ): Evidence[] {
+  const inputEvidence = {
+    runId: input.runId,
+    specId: input.specId,
+    admittedAt: input.admittedAt,
+    expiresAt: input.expiresAt,
+    retentionExpiresAt: input.retentionExpiresAt,
+    limits: input.limits,
+  };
   return [
-    evidence("input", "input", at, input),
+    evidence("input", "input", at, inputEvidence),
     evidence("agent-trace", "agent-trace", at, agentTrace),
     evidence("command-build", "command", at, build),
     evidence("preview", "preview", at, preview),
@@ -406,6 +445,23 @@ function evidence(id: string, kind: Evidence["kind"], at: string, value: unknown
 
 function safeError(error: unknown): string {
   return redact(error instanceof Error ? error.message : String(error));
+}
+
+function compactWorkflowRun(
+  run: TrialRun,
+  artifact: { repository: string; version: string },
+): TrialRun {
+  return {
+    ...run,
+    evidence: run.evidence.map((item) => ({
+      ...item,
+      content: JSON.stringify({
+        repository: artifact.repository,
+        version: artifact.version,
+        evidenceId: item.id,
+      }),
+    })),
+  };
 }
 
 function remainingSeconds(deadline: number, ceiling: number, minimum: number): number {

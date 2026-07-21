@@ -1,4 +1,9 @@
 import type { AuthenticatedIdentity } from "./access-auth";
+import {
+  artifactRepositoryForEnv,
+  destroyArtifactPersistenceSandbox,
+  redactArtifactError,
+} from "./artifacts";
 import type { PlatformEnv } from "./platform-env";
 import { admissionKey, type AdmissionDecision } from "./run-admission";
 import { internalRunPolicy, retentionExpiresAt } from "./run-policy";
@@ -43,17 +48,27 @@ export async function cancelCloudRun(
   try {
     await terminateActiveWorkflow(env, runId);
   } catch (error) {
-    cleanupErrors.push(error instanceof Error ? error.message : String(error));
+    cleanupErrors.push(redactArtifactError(error));
   }
   try {
     await purgeControlledTaskState(env, runId, `${runId}-submission`);
   } catch (error) {
-    cleanupErrors.push(error instanceof Error ? error.message : String(error));
+    cleanupErrors.push(redactArtifactError(error));
   }
   try {
     await destroyTrialSandbox(env, runId);
   } catch (error) {
-    cleanupErrors.push(error instanceof Error ? error.message : String(error));
+    cleanupErrors.push(redactArtifactError(error));
+  }
+  try {
+    await destroyArtifactPersistenceSandbox(env, runId);
+  } catch (error) {
+    cleanupErrors.push(redactArtifactError(error));
+  }
+  try {
+    await artifactRepositoryForEnv(env).delete(runId);
+  } catch (error) {
+    cleanupErrors.push(redactArtifactError(error));
   }
   if (cleanupErrors.length === 0) await admission.release(runId);
   return {

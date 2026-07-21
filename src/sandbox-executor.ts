@@ -14,6 +14,7 @@ import { resolveWorkspacePath } from "./trial-tool-policy";
 
 const allowedLifecycleCommands = new Set(["install", "build", "start"]);
 const workspacePath = "/workspace/app";
+const maxGeneratedSourceFiles = 240;
 
 export type SandboxWorkspace = {
   sandboxId: string;
@@ -130,20 +131,30 @@ export async function collectGeneratedSource(
 ): Promise<StarterFile[]> {
   const session = await getTrialSession(env, runId);
   const listed = await session.listFiles(workspacePath, { recursive: true, includeHidden: true });
+  if (!listed.success) {
+    throw new Error(`Generated source listing failed with exit ${listed.exitCode ?? "unknown"}.`);
+  }
+  const sourceFiles = listed.files.filter(
+    (file) =>
+      file.type === "file" &&
+      !file.relativePath.split("/").some((part) => ["node_modules", "dist", ".git"].includes(part)),
+  );
+  if (sourceFiles.length > maxGeneratedSourceFiles) {
+    throw new Error(`Generated source exceeds ${maxGeneratedSourceFiles} files.`);
+  }
   const files: StarterFile[] = [];
   let bytes = 0;
 
-  for (const file of listed.files) {
-    if (
-      file.type !== "file" ||
-      file.relativePath.split("/").some((part) => ["node_modules", "dist", ".git"].includes(part))
-    ) {
-      continue;
-    }
+  for (const file of sourceFiles) {
     bytes += file.size;
     if (bytes > limits.maxEvidenceBytes)
       throw new Error("Generated source exceeds evidence limit.");
     const result = await session.readFile(file.absolutePath);
+    if (!result.success) {
+      throw new Error(
+        `Generated source read failed for ${file.relativePath} with exit ${result.exitCode ?? "unknown"}.`,
+      );
+    }
     files.push({ path: file.relativePath, content: redact(result.content) });
   }
   return files;

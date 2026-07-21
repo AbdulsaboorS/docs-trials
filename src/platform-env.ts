@@ -6,6 +6,7 @@ import type { TrialWorkflowInput } from "./trial-workflow";
 
 export interface PlatformEnv {
   AI: Ai;
+  ARTIFACTS: Artifacts;
   ASSETS: Fetcher;
   BROWSER: BrowserWorker;
   LOADER: WorkerLoader;
@@ -16,8 +17,6 @@ export interface PlatformEnv {
   ACCESS_AUD?: string;
   ACCESS_TEAM_DOMAIN?: string;
   AI_GATEWAY_URL?: string;
-  ARTIFACTS_NAMESPACE?: string;
-  CF_API_TOKEN?: string;
   REALTIMEKIT_AUTH_ENDPOINT?: string;
   REALTIMEKIT_ROOM_NAME?: string;
 }

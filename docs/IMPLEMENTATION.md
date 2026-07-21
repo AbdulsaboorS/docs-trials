@@ -75,8 +75,9 @@ approved fetch/read tools, source-file-only writes, and bounded turns; Sandbox
 uses one RPC session, immutable lifecycle files, script-disabled installation,
 bounded lifecycle commands, port readiness, tunnels, and cleanup; Browser Run
 blocks external runtime requests and produces deterministic three-state
-results. Artifacts entitlement is confirmed, but namespace/repository creation,
-versioned file mutation, deletion, and the wider cloud path remain unvalidated.
+results. Artifacts repository creation, versioned file mutation, and
+control-plane deletion are confirmed by a standalone live spike. Binding-driven
+Workflow persistence and the wider cloud path remain unvalidated.
 
 ## Phase 5: Browser Verification
 

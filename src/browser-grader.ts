@@ -1,13 +1,15 @@
 import { launch, type BrowserWorker, type Locator, type Page } from "@cloudflare/playwright";
-import type { BrowserGrade } from "./controlled-run-results";
+import {
+  appendBoundedBrowserMessage,
+  type BrowserGrade,
+  type BrowserMessageBudget,
+} from "./controlled-run-results";
 import type { GraderResult } from "./domain";
-import { redact } from "./redact";
 import { evaluateUpdatesFilterObservations } from "./updates-filter-grader";
 
 const evidenceId = "browser-session";
-const maxBrowserMessages = 100;
-const maxBrowserMessageChars = 2_000;
-const maxScreenshotBytes = 2_000_000;
+// Keep the full BrowserGrade below Workflows' 1 MiB step-result ceiling.
+const maxScreenshotBytes = 250_000;
 
 export async function gradeUpdatesFilterPage(
   browserBinding: BrowserWorker,
@@ -21,24 +23,36 @@ export async function gradeUpdatesFilterPage(
   const consoleMessages: string[] = [];
   const networkFailures: string[] = [];
   const unexpectedExternalRequests: string[] = [];
+  const messageBudget: BrowserMessageBudget = { count: 0, bytes: 0 };
   const previewOrigin = new URL(previewUrl).origin;
   const deadline = Date.now() + maxBrowserSeconds * 1_000;
 
   try {
     const page = await browser.newPage();
     setRemainingBrowserTimeout(page, deadline);
-    page.on("pageerror", (error) => pushBrowserMessage(consoleMessages, error.message));
+    page.on("pageerror", (error) =>
+      appendBoundedBrowserMessage(consoleMessages, error.message, messageBudget),
+    );
     page.on("console", (message) => {
-      if (message.type() === "error") pushBrowserMessage(consoleMessages, message.text());
+      if (message.type() === "error")
+        appendBoundedBrowserMessage(consoleMessages, message.text(), messageBudget);
     });
     page.on("response", (response) => {
       if (response.status() >= 500)
-        pushBrowserMessage(networkFailures, `${response.status()} ${response.url()}`);
+        appendBoundedBrowserMessage(
+          networkFailures,
+          `${response.status()} ${response.url()}`,
+          messageBudget,
+        );
     });
     await page.route("**/*", async (route) => {
       const requestUrl = new URL(route.request().url());
       if (requestUrl.protocol.startsWith("http") && requestUrl.origin !== previewOrigin) {
-        pushBrowserMessage(unexpectedExternalRequests, requestUrl.toString());
+        appendBoundedBrowserMessage(
+          unexpectedExternalRequests,
+          requestUrl.toString(),
+          messageBudget,
+        );
         await route.abort("blockedbyclient");
         return;
       }
@@ -121,6 +135,7 @@ export async function gradeRealtimeKitRoom(
   const browser = await launch(browserBinding, { recording: false, keep_alive: 120_000 });
   const consoleMessages: string[] = [];
   const networkFailures: string[] = [];
+  const messageBudget: BrowserMessageBudget = { count: 0, bytes: 0 };
   let screenshot: Uint8Array | undefined;
 
   try {
@@ -129,13 +144,20 @@ export async function gradeRealtimeKitRoom(
     const pageA = await participantA.newPage();
     const pageB = await participantB.newPage();
     for (const page of [pageA, pageB]) {
-      page.on("pageerror", (error) => consoleMessages.push(redact(error.message)));
+      page.on("pageerror", (error) =>
+        appendBoundedBrowserMessage(consoleMessages, error.message, messageBudget),
+      );
       page.on("console", (message) => {
-        if (message.type() === "error") consoleMessages.push(redact(message.text()));
+        if (message.type() === "error")
+          appendBoundedBrowserMessage(consoleMessages, message.text(), messageBudget);
       });
       page.on("response", (response) => {
         if (response.status() >= 500)
-          networkFailures.push(redact(`${response.status()} ${response.url()}`));
+          appendBoundedBrowserMessage(
+            networkFailures,
+            `${response.status()} ${response.url()}`,
+            messageBudget,
+          );
       });
       await page.goto(previewUrl, { waitUntil: "networkidle" });
     }
@@ -150,7 +172,8 @@ export async function gradeRealtimeKitRoom(
     const countAfterLeave = await pageA.getByTestId("participant-count").textContent();
     await pageB.getByTestId("join-room").click();
     const countAfterRejoin = await pageA.getByTestId("participant-count").textContent();
-    screenshot = await pageA.screenshot({ fullPage: true });
+    const captured = await pageA.screenshot({ fullPage: true });
+    if (captured.byteLength <= maxScreenshotBytes) screenshot = captured;
 
     const noErrors = consoleMessages.length === 0 && networkFailures.length === 0;
     const results: GraderResult[] = [
@@ -209,11 +232,6 @@ function setRemainingBrowserTimeout(page: Page, deadline: number): void {
   if (remaining <= 0) throw new Error("Browser verification exceeded its time limit.");
   page.setDefaultTimeout(remaining);
   page.setDefaultNavigationTimeout(remaining);
-}
-
-function pushBrowserMessage(target: string[], value: string): void {
-  if (target.length >= maxBrowserMessages) return;
-  target.push(redact(value).slice(0, maxBrowserMessageChars));
 }
 
 function inconclusiveResult(criterion: string, detail: string): GraderResult {

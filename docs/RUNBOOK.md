@@ -64,10 +64,10 @@ pnpm exec wrangler deploy
 ## Live Checks
 
 Controlled cloud execution is currently disabled in the Worker. Artifacts API
-entitlement is confirmed, but the run and grader routes must continue returning
-`503` until namespace/repository/versioned-file behavior and ADR 0007's
-authentication, admission, budget, cancellation, and retention controls are
-live-validated.
+entitlement and standalone Git behavior are confirmed, but the run and grader
+routes must continue returning `503` until the prepared binding persistence path
+and ADR 0007's authentication, admission, budget, cancellation, authenticated
+read, and retention controls are live-validated.
 
 After a safe deployment, open the Worker URL to load the Kumo dashboard and
 check the account configuration:

@@ -39,12 +39,14 @@ Updated: 2026-07-21
 - The disabled controlled-cloud implementation now prepares the frozen starter
   in an RPC Sandbox, submits bounded Think work with approved tools, installs
   and builds, opens a port-4173 tunnel, grades with Browser Run, assembles the
-  redacted package, and cleans up. It is not live-tested and does not persist.
-- The safety review now enforces one reused Sandbox session, source-file-only
-  writes, immutable package/build controls, script-disabled install, absolute
-  run deadlines, blocked external browser requests, bounded browser evidence,
-  no Browser recording, terminal Think cancellation before purge, and admission
-  release only after cleanup succeeds.
+  redacted package, and saves it through the Artifacts binding and a separate
+  clean Git Sandbox. This path is not live-tested.
+- The safety review now enforces one reused trial Sandbox session,
+  source-file-only writes, immutable package/build controls, script-disabled
+  install, absolute run deadlines, blocked external browser requests, bounded
+  browser evidence, no Browser recording, a credential-isolated persistence
+  Sandbox, terminal Think cancellation before purge, and admission release only
+  after cleanup succeeds.
 - Cloudflare Access claim/signature validation, per-identity atomic admission,
   one active run, idempotent retries, cancellation, fixed resource ceilings,
   and a seven-day Artifact retention target are prepared behind the disabled
@@ -66,32 +68,35 @@ pnpm trial:local
 pnpm --dir fixtures/updates-filter-starter build
 ```
 
-All passed on 2026-07-21. The test suite contains 22 passing tests. `pnpm build`
+All passed on 2026-07-21. The test suite contains 27 passing tests. `pnpm build`
 uses Wrangler's `--containers-rollout=none` dry-run path because Docker is not
 available locally; no Worker or container was deployed.
 
 ## Cloud Access State
 
 Wrangler is authenticated to account `be19a16e5d1b66ff19c4e9a90096344e` with
-Workers, AI, Browser, Containers, and Artifacts write scopes. On 2026-07-21,
-`pnpm exec wrangler artifacts namespaces list` reached the private-beta API and
-returned `No Artifacts namespaces found`. Getting `docs-trials` returned
-`10200 Namespace not found`; the previous entitlement error `10015` is gone.
-This confirms API access, not repository or versioned-file behavior.
+Workers, AI, Browser, Containers, and Artifacts write scopes. On 2026-07-21, a
+disposable repository implicitly created the `docs-trials` namespace. Separate
+short-lived write and read tokens successfully pushed and retrieved two Git
+revisions, including prior-revision content. Repository deletion immediately
+produced `10200 Repository not found`, an empty repository list, and namespace
+`repo_count: 0`.
 
 Installed Wrangler 4.111.0 exposes Artifacts namespace `list` and `get`, but no
-namespace creation command. Repository commands include `create`, `list`,
-`get`, `delete`, and `issue-token`; they require `--namespace`. The next session
-must retrieve the current namespace creation API rather than inventing it.
+namespace creation command. Current docs confirm namespaces are created
+implicitly by the first repository. Repository metadata left `last_push_at`
+null after successful pushes, so Git retrieval is the persistence check.
 
 Do not treat a successful local preview as a real Sandbox, Browser Run,
 Workflow, or Artifacts validation. The local configuration intentionally omits
 Artifacts. Cloud run and grader routes still return `503`, and no cloud
 deployment or paid run occurred in this session.
 
-The remaining release gates include exact monetary/rate controls, live cleanup
-and cancellation races, Workflow/Think/Artifact retention deletion, Access and
-admission behavior, and two repeatable frozen smoke runs.
+The remaining release gates include a live test of the prepared persistence
+adapter, exact monetary/rate controls, live cleanup and cancellation races,
+Workflow/Think/Artifact retention deletion, physical purge confirmation,
+authenticated evidence reads, Access and admission behavior, and two repeatable
+frozen smoke runs.
 
 ## Current Product Direction
 
@@ -116,23 +121,23 @@ admission behavior, and two repeatable frozen smoke runs.
 
 ## Resume Steps
 
-1. Load the Wrangler and Cloudflare skills, retrieve current Artifacts docs and
-   the namespace creation API, and do not rely on pre-trained private-beta API
-   knowledge. Wrangler 4.111.0 does not expose namespace creation.
-2. Create the `docs-trials` namespace and a disposable repository, then validate
-   one harmless versioned file end to end: write, read, revision/history, and
-   deletion. Do not deploy the Worker or run the prepared Workflow yet.
-3. Record the observed namespace/repository/token/Git behavior and deletion
-   semantics in `research/platform-capabilities.md`.
-4. Connect the prepared evidence package to the validated Artifacts repository,
-   then live-test Access, admission, Think, Sandbox, Browser Run, cancellation,
-   retention, and cleanup while public cloud routes remain disabled.
-5. Review ADR 0007 enforcement, exact spending/rate controls, and hard deletion,
-   then run the frozen smoke trial twice before returning to RealtimeKit.
+1. Review and deploy the disabled-route Worker only after approving expected
+   paid Sandbox/container usage. Do not enable public run or grader routes.
+2. Live-test one package save through the binding, clean persistence Sandbox,
+   Git revision verification, stale-token cleanup, and cancellation cleanup.
+3. Implement and test the seven-day retention scheduler/index plus authenticated
+   evidence reads. Confirm physical purge semantics rather than inferring them
+   from immediate `10200` responses.
+4. Review ADR 0007 enforcement and approve exact spending/rate controls, then
+   live-test Access, admission, Think, Sandbox, Browser Run, cancellation, and
+   cleanup while public cloud routes remain disabled.
+5. Run the frozen smoke trial twice before returning to RealtimeKit.
 6. Keep the frontend and agent-neutral local runner parked unless required by
    the controlled cloud path.
 
 ## Worktree
 
-All repository files remain uncommitted, by request. Do not discard or reset
-existing changes.
+The baseline is committed and pushed to
+`https://github.com/AbdulsaboorS/docs-trials` at `af09d9e`. The current branch
+adds the prepared Artifacts persistence path on top of that baseline. Do not
+discard or reset existing changes.

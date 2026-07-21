@@ -1,17 +1,21 @@
 const secretPatterns: Array<{ pattern: RegExp; replacement: string }> = [
   {
+    pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+    replacement: "[REDACTED PRIVATE KEY]",
+  },
+  {
     pattern:
-      /(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password|cookie)["']?\s*:\s*)["'][^"']*["']/gi,
+      /(["']?(?:api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password|cookie)["']?\s*:\s*)["'][^"']*["']/gi,
     replacement: '$1"[REDACTED]"',
   },
   {
     pattern:
-      /(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password|cookie)\s*[:=]\s*)["'][^"']*["']/gi,
+      /(\b(?:api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password|cookie)\s*[:=]\s*)["'][^"']*["']/gi,
     replacement: '$1"[REDACTED]"',
   },
   {
     pattern:
-      /([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password)=)[^&#\s]+/gi,
+      /([?&](?:api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password)=)[^&#\s]+/gi,
     replacement: "$1[REDACTED]",
   },
   { pattern: /Bearer\s+[A-Za-z0-9._~+/=-]+/gi, replacement: "[REDACTED]" },
@@ -30,7 +34,12 @@ const secretPatterns: Array<{ pattern: RegExp; replacement: string }> = [
   { pattern: /\b(?:rtk|cf|art)_v1_[A-Za-z0-9?=&._-]+/gi, replacement: "[REDACTED]" },
   {
     pattern:
-      /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password|cookie)\s*[:=]\s*(?!\[REDACTED\])[^\s,;&#"']+/gi,
+      /\b(?:api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|secret|password|cookie)\s*[:=]\s*(?!\[REDACTED\])[^\s,;&#"']+/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    pattern:
+      /\b[A-Z][A-Z0-9_]*(?:API_KEY|AUTH_TOKEN|ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET|PASSWORD)\s*=\s*[^\s#]+/g,
     replacement: "[REDACTED]",
   },
 ];
@@ -49,7 +58,7 @@ export function redactValue(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value).map(([key, entry]) => [
         key,
-        /^(?:apiKey|accessToken|refreshToken|clientSecret|token|secret|password|authorization|cookie)$/i.test(
+        /^(?:apiKey|authToken|accessToken|refreshToken|clientSecret|token|secret|password|authorization|cookie)$/i.test(
           key,
         )
           ? "[REDACTED]"

@@ -36,8 +36,8 @@ documentation.
 
 - Local evidence packages remain authoritative for local development and CI,
   but they are not a storage substitute for controlled cloud runs. Cloud
-  execution stays disabled until Artifacts provisioning/versioned-file behavior
-  and ADR 0007's remaining controls are live-validated.
+  execution stays disabled until binding-driven Artifacts persistence and ADR
+  0007's remaining controls are live-validated.
 - Browser Run decides browser acceptance criteria in code. A session recording is evidence, not a grading mechanism.
 - The first dashboard uses the same report JSON served by the Worker. Kumo is loaded only when its private registry is available; the headless trial path must not depend on it.
 - A deployment spike must verify Sandbox preview proxying, two isolated browser contexts, and the media substitute before a RealtimeKit run can be considered valid.

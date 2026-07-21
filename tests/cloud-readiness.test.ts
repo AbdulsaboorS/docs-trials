@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { validateAccessClaims } from "../src/access-auth";
 import {
-  ArtifactsUnavailableError,
-  UnavailableArtifactRepository,
+  CloudflareArtifactRepository,
   assembleTrialArtifactPackage,
+  requireSuccessfulArtifactOperation,
+  type ArtifactGitWorkspace,
 } from "../src/artifacts";
 import {
   createSmokeGraderResults,
@@ -225,15 +226,27 @@ describe("cloud readiness contracts", () => {
     );
   });
 
-  it("assembles a complete redacted package without contacting Artifacts", async () => {
+  it("assembles a complete redacted package without contacting Artifacts", () => {
     const local = runLocalTrial(updatesFilterSmokeTrial, at);
     const trialPackage = assembleTrialArtifactPackage({
       spec: updatesFilterSmokeTrial,
       run: local.run,
       report: local.report,
-      generatedSource: [{ path: "src/App.jsx", content: 'const token = "private-token";' }],
+      generatedSource: [
+        {
+          path: "src/App.jsx",
+          content: [
+            'const token = "private-token";',
+            "VITE_API_KEY=private-vite-key",
+            "-----BEGIN PRIVATE KEY-----",
+            "private-key-material",
+            "-----END PRIVATE KEY-----",
+          ].join("\n"),
+        },
+      ],
       agentTrace: {
         authorization: "Bearer private-token",
+        authToken: "private-auth-token",
         accessToken: "private-access-token",
         output: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature",
       },
@@ -265,10 +278,169 @@ describe("cloud readiness contracts", () => {
     const trace = trialPackage.files.find((file) => file.path === "agent-trace.jsonl");
     expect(() => JSON.parse(String(trace?.content).trim())).not.toThrow();
     expect(String(trace?.content)).not.toContain("private-access-token");
+    expect(String(trace?.content)).not.toContain("private-auth-token");
     expect(String(trace?.content)).not.toContain("eyJhbGci");
-    await expect(new UnavailableArtifactRepository().save(trialPackage)).rejects.toBeInstanceOf(
-      ArtifactsUnavailableError,
+    const source = trialPackage.files.find((file) => file.path === "generated-source/src/App.jsx");
+    expect(String(source?.content)).not.toContain("private-vite-key");
+    expect(String(source?.content)).not.toContain("private-key-material");
+  });
+
+  it("creates an immutable Artifacts repo and revokes short-lived credentials", async () => {
+    const initialToken = "art_v1_initial?expires=1784654000";
+    const writeToken = "art_v1_write?expires=1784654000";
+    const revokeToken = vi.fn(async () => true);
+    const repo = {
+      remote: "https://account.artifacts.cloudflare.net/git/docs-trials/run-1.git",
+      createToken: vi.fn(async () => ({
+        id: "token-1",
+        plaintext: writeToken,
+        scope: "write" as const,
+        expiresAt: "2026-07-21T17:00:00.000Z",
+      })),
+      listTokens: vi
+        .fn()
+        .mockResolvedValueOnce({
+          tokens: [
+            {
+              id: "stale-write",
+              scope: "write" as const,
+              state: "active" as const,
+              createdAt: "2026-07-21T16:00:00.000Z",
+              expiresAt: "2026-07-21T17:00:00.000Z",
+            },
+            {
+              id: "active-read",
+              scope: "read" as const,
+              state: "active" as const,
+              createdAt: "2026-07-21T16:00:00.000Z",
+              expiresAt: "2026-07-21T17:00:00.000Z",
+            },
+          ],
+          total: 2,
+        })
+        .mockResolvedValue({ tokens: [], total: 0 }),
+      revokeToken,
+    } as unknown as ArtifactsRepo;
+    const artifacts = {
+      create: vi.fn(async () => ({ token: initialToken })),
+      get: vi.fn(async () => repo),
+      delete: vi.fn(async () => true),
+    } as unknown as Artifacts;
+    const persist = vi.fn(async () => "a".repeat(40));
+    const workspace = { persist } satisfies ArtifactGitWorkspace;
+    const repository = new CloudflareArtifactRepository(artifacts, () => workspace);
+
+    await expect(
+      repository.save({
+        repository: "run-1",
+        files: [
+          { path: "run.json", mediaType: "application/json", content: "{}" },
+          { path: "AX.md", mediaType: "text/markdown", content: "# Report\n" },
+        ],
+      }),
+    ).resolves.toEqual({ repository: "run-1", version: "a".repeat(40) });
+    expect(artifacts.create).toHaveBeenCalledWith("run-1", {
+      description: "Docs Trials evidence for run-1",
+      readOnly: false,
+      setDefaultBranch: "main",
+    });
+    expect(revokeToken).toHaveBeenNthCalledWith(1, initialToken);
+    expect(revokeToken).toHaveBeenNthCalledWith(2, "stale-write");
+    expect(revokeToken).toHaveBeenNthCalledWith(3, writeToken);
+    expect(revokeToken).not.toHaveBeenCalledWith("active-read");
+    expect(persist).toHaveBeenCalledWith(
+      expect.objectContaining({ repository: "run-1", token: writeToken }),
     );
+    await expect(repository.delete("run-1")).resolves.toBe(true);
+    expect(artifacts.delete).toHaveBeenCalledWith("run-1");
+  });
+
+  it("reuses an existing repo and deletes a partial newly-created repo on failure", async () => {
+    const writeToken = "art_v1_write_secret?expires=1784654000";
+    const repo = {
+      remote: "https://account.artifacts.cloudflare.net/git/docs-trials/run-1.git",
+      createToken: vi.fn(async () => ({
+        id: "token-1",
+        plaintext: writeToken,
+        scope: "write" as const,
+        expiresAt: "2026-07-21T17:00:00.000Z",
+      })),
+      listTokens: vi.fn(async () => ({ tokens: [], total: 0 })),
+      revokeToken: vi.fn(async () => true),
+    } as unknown as ArtifactsRepo;
+    const deleteRepo = vi.fn(async () => true);
+    const existingArtifacts = {
+      create: vi.fn(async () => {
+        throw Object.assign(new Error("exists"), { code: "ALREADY_EXISTS" });
+      }),
+      get: vi.fn(async () => repo),
+      delete: deleteRepo,
+    } as unknown as Artifacts;
+    const successful = new CloudflareArtifactRepository(existingArtifacts, () => ({
+      persist: vi.fn(async () => "b".repeat(40)),
+    }));
+    const trialPackage = {
+      repository: "run-1",
+      files: [{ path: "AX.md", mediaType: "text/markdown", content: "# Report\n" }],
+    };
+
+    await expect(successful.save(trialPackage)).resolves.toEqual({
+      repository: "run-1",
+      version: "b".repeat(40),
+    });
+    expect(deleteRepo).not.toHaveBeenCalled();
+
+    const createdArtifacts = {
+      create: vi.fn(async () => ({ token: "art_v1_initial?expires=1784654000" })),
+      get: vi.fn(async () => repo),
+      delete: deleteRepo,
+    } as unknown as Artifacts;
+    const failing = new CloudflareArtifactRepository(createdArtifacts, () => ({
+      persist: vi.fn(async () => {
+        throw new Error(`Bearer ${writeToken}`);
+      }),
+    }));
+    const error = await failing.save(trialPackage).catch((caught: unknown) => caught);
+    expect(String(error)).toContain("Artifacts persistence failed");
+    expect(String(error)).not.toContain(writeToken);
+    expect(deleteRepo).toHaveBeenCalledWith("run-1");
+  });
+
+  it("uses a stable package digest and rejects duplicate paths before persistence", async () => {
+    const digests: string[] = [];
+    const repo = {
+      remote: "https://account.artifacts.cloudflare.net/git/docs-trials/run-1.git",
+      createToken: vi.fn(async () => ({
+        id: "token-1",
+        plaintext: "art_v1_write?expires=1784654000",
+        scope: "write" as const,
+        expiresAt: "2026-07-21T17:00:00.000Z",
+      })),
+      listTokens: vi.fn(async () => ({ tokens: [], total: 0 })),
+      revokeToken: vi.fn(async () => true),
+    } as unknown as ArtifactsRepo;
+    const artifacts = {
+      create: vi.fn(async () => ({ token: "art_v1_initial?expires=1784654000" })),
+      get: vi.fn(async () => repo),
+      delete: vi.fn(async () => true),
+    } as unknown as Artifacts;
+    const repository = new CloudflareArtifactRepository(artifacts, () => ({
+      persist: vi.fn(async (input) => {
+        digests.push(input.digest);
+        return "c".repeat(40);
+      }),
+    }));
+    const files = [
+      { path: "run.json", mediaType: "application/json", content: "{}" },
+      { path: "AX.md", mediaType: "text/markdown", content: "# Report\n" },
+    ];
+
+    await repository.save({ repository: "run-1", files });
+    await repository.save({ repository: "run-1", files: [...files].reverse() });
+    expect(digests[0]).toBe(digests[1]);
+    await expect(
+      repository.save({ repository: "run-1", files: [files[0]!, files[0]!] }),
+    ).rejects.toThrow("Duplicate artifact path");
   });
 
   it("rejects oversized or unsafe artifact packages", () => {
@@ -297,5 +469,41 @@ describe("cloud readiness contracts", () => {
         maxBytes: 1_024,
       }),
     ).toThrow("exceeds evidence limit");
+    expect(() =>
+      assembleTrialArtifactPackage({
+        spec: updatesFilterSmokeTrial,
+        run: local.run,
+        report: local.report,
+        generatedSource: Array.from({ length: 251 }, (_, index) => ({
+          path: `src/file-${index}.js`,
+          content: "x",
+        })),
+        agentTrace: {},
+        commands: {},
+        browserSummary: {},
+        maxBytes: internalRunPolicy.limits.maxEvidenceBytes,
+      }),
+    ).toThrow("exceeds 250 files");
+    expect(() =>
+      assembleTrialArtifactPackage({
+        spec: updatesFilterSmokeTrial,
+        run: local.run,
+        report: local.report,
+        generatedSource: [{ path: "src/unsafe-💥.js", content: "x" }],
+        agentTrace: {},
+        commands: {},
+        browserSummary: {},
+        maxBytes: internalRunPolicy.limits.maxEvidenceBytes,
+      }),
+    ).toThrow("Invalid artifact path");
+  });
+
+  it("rejects unsuccessful Sandbox file operations", async () => {
+    await expect(
+      requireSuccessfulArtifactOperation(
+        "write run.json",
+        Promise.resolve({ success: false, exitCode: 1 }),
+      ),
+    ).rejects.toThrow("write run.json failed with exit 1");
   });
 });

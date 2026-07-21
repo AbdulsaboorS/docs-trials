@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { appendBoundedBrowserMessage } from "../src/controlled-run-results";
 import { evaluateUpdatesFilterObservations } from "../src/updates-filter-grader";
 
 describe("updates-filter browser grader", () => {
@@ -39,5 +40,19 @@ describe("updates-filter browser grader", () => {
       "failed",
       "failed",
     ]);
+  });
+
+  it("bounds all browser messages by count and UTF-8 bytes", () => {
+    const messages: string[] = [];
+    const budget = { count: 0, bytes: 0 };
+    for (let index = 0; index < 200; index += 1) {
+      appendBoundedBrowserMessage(messages, "💥".repeat(1_000), budget);
+    }
+
+    expect(messages).toHaveLength(100);
+    expect(budget.bytes).toBeLessThanOrEqual(200_000);
+    expect(
+      messages.reduce((bytes, message) => bytes + new TextEncoder().encode(message).byteLength, 0),
+    ).toBe(budget.bytes);
   });
 });

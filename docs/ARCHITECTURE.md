@@ -79,7 +79,7 @@ Browser Run owns browser-side verification. It opens independent participant con
 
 ### Artifacts
 
-Artifacts holds the immutable trial package: frozen inputs, generated source, trace, evidence, and report. One trial run maps to one versioned artifact repository or equivalent isolated revision. The final storage model must be checked against current Artifacts availability and API guidance before implementation.
+Artifacts holds the immutable trial package: frozen inputs, generated source, trace, evidence, and report. One trial run maps to one versioned artifact repository. A separate clean Sandbox writes the package through Git using a short-lived repository-scoped token; the agent-controlled trial Sandbox never receives that credential.
 
 ### Analysis Agent
 
