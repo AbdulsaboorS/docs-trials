@@ -1,59 +1,154 @@
 # Docs Trials
 
-Docs Trials evaluates whether an AI coding agent can use developer documentation to complete and verify a real integration task.
+Check whether an AI coding agent can build a working integration from your documentation.
 
-It measures outcomes, not prose quality. A trial freezes a task, documentation
-resources, environment, and deterministic acceptance criteria. It can run with
-a Docs Trials-controlled cloud agent or through the agent-neutral local runner.
-The result is an evidence-backed Agent Experience report (`AX.md`) with findings
-and proposed documentation fixes.
+Give an agent your docs and a task. Docs Trials records what it built, then runs
+deterministic checks against the running application and writes a report.
 
-## Controlled-Cloud Showcase
+It runs on your machine. Nothing is uploaded.
 
-The first controlled-cloud showcase is a curated RealtimeKit trial:
+## Why
 
-> Using only the supplied RealtimeKit resources, build and verify a React video room where two browser participants can join, publish media, leave, and rejoin.
-
-The smallest complete path is:
+A build that exits `0` proves very little. Here is a real run against the
+[TanStack Query quick start](https://tanstack.com/query/latest/docs/framework/react/quick-start).
+The last line of that page is `render(<App />, document.getElementById('root'))`,
+which is the React 17 API. An agent that follows the page literally produces this:
 
 ```txt
-Curated task -> coding agent -> Sandbox preview -> Browser Run grader -> AX.md
+FAILED — 7 passed, 1 failed, 0 inconclusive
+
+  PASS  Dependencies install successfully.
+  PASS  The project builds successfully.
+  PASS  The application starts and answers an HTTP request.
+  PASS  The entry page loads without an HTTP or navigation error.
+  FAIL  The page raises no uncaught error or console error.
+        1 application error. First: render is not a function
+  PASS  No request returns a 5xx response.
+  PASS  No credential-shaped value appears in browser-delivered assets.
+  PASS  The page contacts no unexpected external origin.
 ```
 
-## Repository guide
+The project installs. The project builds. The server answers with HTTP 200. The
+page is blank. Only a browser catches it.
 
-- [`AGENTS.md`](AGENTS.md): operating instructions and fixed product decisions.
-- [`docs/PRODUCT.md`](docs/PRODUCT.md): product definition and scope.
-- [`docs/MVP.md`](docs/MVP.md): first trial contract and acceptance criteria.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): target system design.
-- [`docs/UX.md`](docs/UX.md): user experience and interface states.
-- [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md): implementation sequence.
-- [`docs/SMOKE_TRIAL.md`](docs/SMOKE_TRIAL.md): first controlled-cloud validation task.
-- [`docs/AI_SEARCH_TRIAL.md`](docs/AI_SEARCH_TRIAL.md): first private connected-integration dogfood contract.
-- [`research/`](research/README.md): evidence, assumptions, and open research questions.
+## Install
+
+```sh
+npm install -g docs-trials
+npx playwright install chromium
+```
+
+Node 22 or later.
+
+## Use
+
+```sh
+docs-trials init                 # write trial.json
+docs-trials prepare              # freeze the task, print agent instructions
+                                 # ... give those instructions to your agent ...
+docs-trials verify latest        # run the checks, write AX.md
+```
+
+`verify` exits `0` when every check passed, `1` when a check failed, and `2`
+when the result is inconclusive. That makes it usable in CI.
+
+### trial.json
+
+```json
+{
+  "version": 1,
+  "id": "checkout-quickstart",
+  "title": "Checkout quickstart",
+  "task": "Using only the supplied docs, add a checkout page to this app.",
+  "docs": [{ "label": "Quickstart", "url": "https://example.com/docs/quickstart" }],
+  "goals": ["A customer can reach the success page."],
+  "run": {
+    "install": "npm install",
+    "build": "npm run build",
+    "start": "npm run dev -- --port 5173 --strictPort",
+    "url": "http://127.0.0.1:5173"
+  },
+  "allowedOrigins": ["https://api.example.com"]
+}
+```
+
+`goals` are recorded in the report and **never graded**. Only the checks below
+produce a result.
+
+## What is checked
+
+| Check              | Passes when                                                                     |
+| ------------------ | ------------------------------------------------------------------------------- |
+| install            | The install command exits `0`.                                                  |
+| build              | The build command exits `0`.                                                    |
+| boot               | The start command brings up a server that answers an HTTP request.              |
+| page load          | The entry page navigates and returns a status below 400.                        |
+| application errors | No uncaught exception and no `console.error`.                                   |
+| server errors      | No response returns a 5xx status.                                               |
+| client secrets     | No issuer-prefixed credential, JWT, or private key in browser-delivered assets. |
+| network egress     | Every external origin the page contacts is declared in `allowedOrigins`.        |
+
+These are generic. They need no per-task authoring and work on any web
+application. They test that the integration installs, builds, boots, loads, and
+does not leak credentials to the browser.
+
+**They do not test whether the application fulfils your task.** Docs Trials
+will not claim otherwise.
+
+## Three outcomes
+
+- **passed** — the check observed the required behaviour.
+- **failed** — the check observed behaviour that contradicts it.
+- **inconclusive** — there was not enough evidence to decide.
+
+A port that was already busy, a browser that would not start, or a step skipped
+because an earlier one failed all produce `inconclusive`. An inconclusive result
+is not a documentation finding.
+
+## Evidence
+
+Each run writes to `~/.docs-trials/runs/<run-id>/`:
+
+```txt
+run.json                 frozen manifest, digest, baseline revision, results
+AGENT_INSTRUCTIONS.md    exactly what the agent was given
+AX.md                    the report
+results.json             machine-readable check results
+evidence/install.txt     install output
+evidence/build.txt       build output
+evidence/boot.txt        start command output
+evidence/browser.txt     console, network, origins, captured assets, body text
+evidence/source-diff.txt what the agent changed, against the Git baseline
+```
+
+Runs are stored outside your workspace, so the agent cannot read the manifest,
+rewrite its own instructions, or dirty the baseline being recorded. Evidence is
+redacted before it is written.
+
+## Limits
+
+Read these before you trust a result.
+
+- **The model already knows your docs.** A frontier model can build a Stripe
+  integration without reading Stripe's documentation. Docs Trials cannot
+  separate what the agent read from what it already knew. Results are most
+  meaningful for new products, new versions, and recently changed APIs.
+- **One run is a diagnostic, not a benchmark.** Agents are stochastic. Compare
+  variants only across repeated runs with one deliberate change.
+- **Nothing enforces which docs the agent read.** The manifest tells the agent
+  what to use. It cannot stop it searching.
+- **The checks are generic.** Passing means the integration works mechanically,
+  not that it does what you asked.
+- **Commands run on your host.** `install`, `build`, and `start` are not
+  sandboxed. Use a disposable workspace and remove provider credentials.
 
 ## Status
 
-The local vertical slice includes validated trial schemas, redacted evidence,
-deterministic command grading, portable `AX.md` reports, an agent-neutral local
-runner, a checked-in local Playwright profile for the updates-filter smoke task,
-and a Kumo workbench. Unsupported user-authored browser criteria remain
-inconclusive rather than being inferred from agent claims.
+Early. The CLI works end to end and the checks above are real. There is no
+hosted mode, no comparison view, and no task-specific verification yet.
 
-Artifacts entitlement and its standalone Git path are confirmed, including
-implicit namespace creation, scoped tokens, two-revision history, historical
-reads, and control-plane repository deletion. The application persistence
-adapter, physical purge behavior, and complete cloud pipeline have not been
-deployed or live-tested. Cloud execution routes remain disabled.
-
-The current release path is local-first: manual workbench acceptance,
-UI/runner integration, CI, and installable CLI packaging. See
-[`docs/RUNBOOK.md`](docs/RUNBOOK.md).
-
-The AI Search connected-trial preflight now freezes a credential-free synthetic
-knowledge corpus, isolated resource envelope, deterministic MCP checks, and
-cleanup-gated outcome. It does not create live Cloudflare resources; a trusted
-provider adapter and private safety review remain required.
+The previous Cloudflare Workers implementation is archived at the
+`archive/cloud-path-v0` tag.
 
 ## License
 

@@ -1,81 +1,82 @@
 import { describe, expect, it } from "vitest";
-import type { GraderResult, TrialRun } from "../src/domain";
-import { deriveTrialOutcome } from "../src/domain";
-import { updatesFilterSmokeTrial } from "../src/fixture";
-import { runLocalTrial } from "../src/local-runner";
-import { renderAXReport } from "../src/report";
+import { manifestSchema } from "../src/core/manifest";
+import { checkIds, result, type CheckResult } from "../src/core/outcome";
+import { renderReport } from "../src/core/report";
+import type { RunRecord } from "../src/core/run";
 
-const base = runLocalTrial(updatesFilterSmokeTrial, new Date("2026-07-20T12:00:00.000Z"));
+const manifest = manifestSchema.parse({
+  version: 1,
+  id: "sample",
+  title: "Sample trial",
+  task: "Build a checkout page.",
+  docs: ["https://example.com/docs"],
+  goals: ["A customer can complete a payment."],
+  run: { start: "node server.mjs" },
+});
 
-function withResults(results: GraderResult[]): TrialRun {
+function record(results: CheckResult[], outcome: "passed" | "failed" | "inconclusive"): RunRecord {
   return {
-    ...base.run,
-    status: deriveTrialOutcome(updatesFilterSmokeTrial.acceptanceCriteria, results),
-    graderResults: results,
+    runId: "sample-20260804-120000",
+    status: "verified",
+    manifest,
+    manifestDigest: "a".repeat(64),
+    workspace: "/tmp/ws",
+    preparedAt: "2026-08-04T12:00:00.000Z",
+    verification: {
+      startedAt: "2026-08-04T12:00:00.000Z",
+      completedAt: "2026-08-04T12:01:30.000Z",
+      outcome,
+      results,
+    },
   };
 }
 
-describe("trial outcome and report", () => {
-  it("passes only when every expected criterion passed exactly once", () => {
-    expect(
-      deriveTrialOutcome(updatesFilterSmokeTrial.acceptanceCriteria, base.run.graderResults),
-    ).toBe("passed");
-    const incompleteResults = base.run.graderResults.slice(1);
-    expect(deriveTrialOutcome(updatesFilterSmokeTrial.acceptanceCriteria, incompleteResults)).toBe(
-      "inconclusive",
+describe("renderReport", () => {
+  it("labels author goals as not verified", () => {
+    const markdown = renderReport(
+      record(
+        checkIds.map((id) => result(id, "passed", "ok")),
+        "passed",
+      ),
     );
-    const report = renderAXReport(updatesFilterSmokeTrial, withResults(incompleteResults));
-    expect(report.markdown).toContain("No grader result was produced.");
-    expect(report.markdown).toContain("Missing grader result for:");
+    expect(markdown).toContain("Author goals — not verified");
+    expect(markdown).toContain("A customer can complete a payment.");
+    expect(markdown).toContain("did **not** check any of them");
   });
 
-  it("gives a deterministic failure precedence over an inconclusive result", () => {
-    const results = base.run.graderResults.map((result, index) => ({
-      ...result,
-      outcome:
-        index === 0
-          ? ("failed" as const)
-          : index === 1
-            ? ("inconclusive" as const)
-            : result.outcome,
-    }));
-    expect(deriveTrialOutcome(updatesFilterSmokeTrial.acceptanceCriteria, results)).toBe("failed");
-    expect(renderAXReport(updatesFilterSmokeTrial, withResults(results)).outcome).toBe("failed");
-  });
-
-  it("permits only an explained operational downgrade", () => {
-    const results = base.run.graderResults.map((result, index) => ({
-      ...result,
-      outcome: index === 0 ? ("failed" as const) : result.outcome,
-    }));
-    const run = { ...withResults(results), status: "inconclusive" as const };
-    const report = renderAXReport(updatesFilterSmokeTrial, run, {
-      operationalDowngrade: "Cleanup verification was unavailable.",
-    });
-
-    expect(report.outcome).toBe("inconclusive");
-    expect(report.markdown).toContain("**INCONCLUSIVE**");
-    expect(report.markdown).toContain("| FAILED |");
-    expect(report.markdown).toContain("Cleanup verification was unavailable.");
-    expect(() => renderAXReport(updatesFilterSmokeTrial, run)).toThrow("does not match");
-  });
-
-  it("reports an environment interruption as unresolved rather than a docs failure", () => {
-    const results = base.run.graderResults.map((result, index) =>
-      index === 2
-        ? {
-            ...result,
-            outcome: "inconclusive" as const,
-            detail: "The Browser Run environment stopped before this check completed.",
-          }
-        : result,
+  it("never presents a goal as a passing check", () => {
+    const markdown = renderReport(
+      record(
+        checkIds.map((id) => result(id, "passed", "ok")),
+        "passed",
+      ),
     );
-    const report = renderAXReport(updatesFilterSmokeTrial, withResults(results));
+    const table = markdown.slice(markdown.indexOf("| Result |"), markdown.indexOf("## Observed"));
+    expect(table).not.toContain("A customer can complete a payment.");
+  });
 
-    expect(report.outcome).toBe("inconclusive");
-    expect(report.markdown).toContain("## Unresolved Verification");
-    expect(report.markdown).toContain("Browser Run environment stopped");
-    expect(report.markdown).toContain("It is not a documentation failure.");
-    expect(report.markdown).toContain("No deterministic acceptance criterion failed.");
+  it("lists checks that never ran as inconclusive", () => {
+    const partial = [result("install", "passed", "ok")];
+    const markdown = renderReport(record(partial, "inconclusive"));
+    expect(markdown).toContain("This check did not run.");
+    expect(markdown).toContain("**INCONCLUSIVE**");
+  });
+
+  it("separates observed failures from unresolved checks", () => {
+    const results = [
+      result("install", "passed", "ok"),
+      result("build", "failed", "exit 1"),
+      result("boot", "inconclusive", "skipped"),
+    ];
+    const markdown = renderReport(record(results, "failed"));
+    const failures = markdown.slice(markdown.indexOf("## Observed failures"));
+    expect(failures).toContain("exit 1");
+    expect(markdown).toContain("## Unresolved checks");
+    expect(markdown).toContain("does not mean the");
+  });
+
+  it("refuses to render before verification", () => {
+    const unverified = { ...record([], "inconclusive"), verification: undefined };
+    expect(() => renderReport(unverified)).toThrow(/before verification/);
   });
 });

@@ -2,135 +2,109 @@
 
 ## Mission
 
-Build an open-source platform that determines whether a coding agent can successfully use developer documentation to ship a working integration. The platform must produce reproducible, evidence-backed findings rather than subjective documentation scores.
+Ship a command line tool that tells a documentation team whether an AI coding
+agent can build a working integration from their docs, backed by evidence a
+sceptic can check.
 
-## Fixed Decisions
+## The rule that matters most
 
-- Repository name: `docs-trials`.
-- License: Apache-2.0.
-- Initial product: reproducible documentation trials, starting with a curated
-  baseline and expanding to user-authored drafts.
-- Initial showcase: RealtimeKit two-participant React video room.
-- Two execution modes: a Docs Trials-controlled cloud agent for comparable
-  runs, and an agent-neutral local runner for a user's existing coding agent.
-- Primary outcome: deterministic verification of a working application.
-- Artifact format: each completed trial emits a portable `AX.md` report plus machine-readable evidence.
-- Infrastructure direction: Cloudflare Workers, Agents SDK, Workflows, Sandbox SDK, Browser Run, Artifacts, AI Gateway, Kumo, and Tailwind CSS v4.
-- Anonymous users can create and run local trials only. Their inputs and
-  reports remain in their workspace unless they explicitly opt into a future
-  cloud-backed run.
-- Supported hosted connected trials use temporary Docs Trials-owned provider
-  resources. The website does not request access to a user's provider account;
-  local BYO-account execution is an explicit advanced mode.
+**Never report a result the code did not observe.**
 
-## Product Rules
+An earlier version of this project assigned a shell command's exit code to
+whichever author criterion happened to be first. `echo hello` produced a report
+that read `PASSED — A customer can complete a Stripe Checkout payment`. That
+bug was possible because results were keyed by user text.
 
-- Test the documentation and developer resources, not an LLM's ability to guess from prior knowledge.
-- The coding agent may access only the resources assigned to that trial variant.
-- Do not preload an entire documentation corpus into the agent context.
-- Prefer deterministic graders. An analysis model may explain results, but may not decide the authoritative outcome.
-- Capture the evidence chain: source revision, resources exposed, prompts, agent actions, generated source, command output, browser evidence, and grader results.
-- Never expose persistent customer credentials to generated client code or trial artifacts.
-- A user defines the task to test. Workers AI may suggest a task and
-  verification profile from submitted docs, but the user must approve the
-  frozen manifest before execution.
-- Reports distinguish deterministic verification from advisory AI diagnosis.
-  The diagnostic must cite redacted evidence, state confidence, and never
-  change the `passed`, `failed`, or `inconclusive` result.
-- Keep the first self-serve verification profile narrow: web applications with
-  browser-visible acceptance criteria. CLI, server, and connected-integration
-  profiles follow after the end-to-end local path works.
-- A private connected-profile dogfood trial may be prepared earlier, but it may
-  mutate live resources only through a reviewed provider adapter and the cloud
-  admission controls.
+Results are now keyed by a `CheckId` defined in `src/core/outcome.ts`. Every
+check is code in this package. An author's `goals` are recorded and explicitly
+not graded. Keep it that way. If you add a result type, add the check that
+produces it first.
 
-## Source Of Truth
+## Fixed decisions
 
-- Product intent: [`docs/PRODUCT.md`](docs/PRODUCT.md)
-- MVP task and graders: [`docs/MVP.md`](docs/MVP.md)
-- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- UX: [`docs/UX.md`](docs/UX.md)
-- Build order: [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md)
-- Assumptions and references: [`research/`](research/README.md)
-- Decisions: [`docs/decisions/`](docs/decisions/)
+- Name: `docs-trials`. Apache-2.0. Public.
+- A local CLI. Execution never leaves the user's machine.
+- Deterministic checks own the outcome. A model may explain a result. It may
+  never change one.
+- Three outcomes: `passed`, `failed`, `inconclusive`. Missing evidence is
+  `inconclusive`, never `failed`.
+- Infrastructure trouble is never reported as an application defect. A busy
+  port, an absent browser, or a skipped step is `inconclusive`.
+- Runs are stored outside the workspace so the agent under test cannot read the
+  manifest or rewrite its own instructions.
+- Evidence is redacted before it is written, and redaction masks values without
+  rewriting the surrounding text.
+- The archived Cloudflare Workers implementation is at tag
+  `archive/cloud-path-v0`. Do not resurrect it piecemeal.
 
-When implementation changes a fixed decision, add an ADR instead of silently changing behavior.
+## Planned architecture
 
-## Engineering Conventions
+Execution stays local. Cloud services earn their place on the sharing surface,
+not the running surface.
 
-- Use TypeScript with strict type checking.
-- Use `pnpm` for package management.
-- Use a workspace only when more than one deployable package is actually needed.
-- Keep schemas close to the domain and validate data crossing process or network boundaries.
-- Treat logs and recordings as sensitive evidence; redact tokens, room secrets, authorization headers, and personally identifying test data before persistence.
-- Prefer small, vertically complete changes over framework-first abstractions.
-- Document external API assumptions with a source URL and retrieval date in `research/`.
-- Retrieve current Cloudflare product APIs before implementation. Product APIs and availability may change.
-- Do not preserve backward compatibility. Remove obsolete paths instead of adding compatibility layers, fallbacks, or migrations.
-- Choose the simplest implementation that fully meets the current requirements. Avoid speculative abstractions, configuration, and indirection.
-- Grow the system in layers. Start with the smallest version that works end to end.
-- Add each new capability to a product that already works. Never trade a working product for unfinished complexity.
-- Keep components modular and keep concerns clearly separated.
-- Prefer established, well-maintained libraries when they reduce complexity or improve reliability.
-- Do not reimplement common functions without a clear reason.
-- Use existing project dependencies before you write a new implementation or add packages.
-- Check library documentation and types before you decide that a library does not have a required capability.
-- Make architectural decisions for the long term. Do not accept temporary solutions that you plan to replace.
-- Study how established products solve the problem before you design a solution.
-- Use proven patterns and conventions instead of creating a new approach without a clear reason.
-- When you change keyboard shortcuts, check `keybindings.ts` first.
-- Update the Keyboard Shortcuts dialog when you change a keyboard shortcut.
-- Do not add subtitles, helper text, or descriptive text beneath UI elements by default.
-- Prefer one concise heading or label that explains itself.
-- Add supporting text only when the user requests it or when it prevents an error or misunderstanding.
-- Do not use supporting text to repeat a heading.
-- Do not add code comments that refer to minor events, such as a specific bug fix.
-- Comments can describe important events that explain the current design.
+| Stage    | Scope                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------- |
+| v0 (now) | CLI. Baseline checks. No network dependency.                                                                  |
+| v1       | `docs-trials publish` — Worker + R2 + D1 + Turnstile to host a report at a URL.                               |
+| v2       | Task-specific checks proposed from the docs, approved by the author, frozen before the run, executed locally. |
+| v3       | Hosted runs, if users ask for them. Workflows, Sandbox, Browser Rendering, Containers.                        |
 
-## Critical Thinking
+Do not start a later stage before the one before it has users.
 
-**You are not a code monkey. You are expected to think about design and UX.**
+## Honesty rules
 
-- Question whether the current component structure is right before adding to it.
-- If a directory has more than 10-12 files, consider whether subdirectories are needed.
-- If you find yourself duplicating logic across components, stop and extract a shared hook or component.
-- If a name feels wrong, it probably is. Raise it before committing.
-- When asked to do something, check whether it conflicts with existing conventions.
-- Say "I don't know" when uncertain rather than guessing.
-- If multiple interpretations exist, present them rather than picking one.
+- State what a check observed, not what it implies.
+- A failure is a fact about the run. It becomes a documentation finding only
+  when the evidence supports that attribution.
+- Every claim in the README must be reproducible by running the tool.
+- Do not describe unbuilt capability in the present tense.
+- Disclose the limits: pretrained knowledge, run-to-run variance, unenforced
+  doc scope, unsandboxed commands.
 
-## Structural Awareness
+## Engineering conventions
 
-**Before creating new files, check context:**
+- TypeScript, strict, `pnpm`, Node 22+.
+- Validate anything crossing a process or file boundary with Zod.
+- Choose the simplest implementation that meets the current requirement.
+- Grow in layers. Add capability to a product that already works.
+- Prefer established libraries. Check their types before deciding they lack a
+  capability.
+- Do not keep backward compatibility. Delete obsolete paths.
+- No speculative abstraction. An interface with one implementation and one test
+  double is not worth its cost.
+- Do not write more than a day of code before running it. This project's worst
+  failure was 2,100 lines written before a single deployment.
+- Cleanup must never throw away a completed run.
+- Comments explain a design decision. They do not narrate a bug fix.
 
-1. Inspect the target directory to see what is already there.
-2. Check whether a similar component, hook, or pattern already exists.
-3. Read `.claude/conventions.md` for naming and placement rules when that file exists.
-4. If you are about to create the 10th or later file in a flat directory, propose reorganization first.
+## Critical thinking
+
+- Question the premise before adding to it.
+- Say "I do not know" instead of guessing.
+- If multiple readings exist, present them rather than picking one silently.
+- If a name feels wrong, raise it before committing.
 
 ## ASD-STE100 Simplified Technical English
 
-Always respond using ASD-STE100 Simplified Technical English. It is a controlled writing standard. Aerospace and defense groups made it. It helps people write clear technical text.
+Write documentation and user-facing text in Simplified Technical English.
 
-Key rules:
-
-- **Use approved words only.** The standard gives a word list. Each word has one meaning.
-- **Use one word for one idea.** Do not use two words for the same idea.
-- **Write short sentences.** Use 20 words or less for instructions.
-- **Use active voice.** Write "Turn the switch", not "The switch must be turned".
-- **Write short paragraphs.** Keep one topic in each paragraph.
-
-The goal is easy reading. Many readers are not native English speakers. Clear text helps them do the work safely and correctly.
+- One word, one meaning.
+- Short sentences. Twenty words or fewer for an instruction.
+- Active voice: "Stop the process", not "The process must be stopped".
+- One topic per paragraph.
 
 ## Validation
 
-The established validation commands are:
-
-```txt
+```sh
 pnpm lint
-pnpm test
 pnpm typecheck
+pnpm test
 pnpm build
 ```
 
-For a trial path, add a deterministic integration command that reports a machine-readable result before considering the feature complete.
+`pnpm test` includes an integration suite that starts real servers and drives a
+real Chromium. Install it once with
+`pnpm exec playwright install chromium chromium-headless-shell`.
+
+Before you call a change to the check pipeline complete, run a real trial
+against real third-party documentation and read the report.

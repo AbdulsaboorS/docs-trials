@@ -1,6 +1,0 @@
-# Copy to .dev.vars for local Workers development. Never commit real values.
-AI_GATEWAY_URL=
-ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
-ACCESS_AUD=
-REALTIMEKIT_AUTH_ENDPOINT=
-REALTIMEKIT_ROOM_NAME=docs-trials-test

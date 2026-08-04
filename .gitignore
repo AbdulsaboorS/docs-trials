@@ -1,12 +1,7 @@
 .DS_Store
-.dev.vars
-.wrangler
-.env
-.env.*
-!.env.example
 node_modules/
 dist/
 coverage/
-.vite/
-trial-output/
 .docs-trials/
+*.tsbuildinfo
+.wrangler
