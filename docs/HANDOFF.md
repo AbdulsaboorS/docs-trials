@@ -1,6 +1,6 @@
 # Session Handoff
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 ## Completed
 
@@ -26,6 +26,12 @@ Updated: 2026-07-21
   `pnpm trial:local:view`. It writes manifests, agent instructions, redacted
   evidence, `AX.md`, and JSON reports under `.docs-trials/runs/` in the user's
   workspace. See [`docs/LOCAL_RUNNER.md`](LOCAL_RUNNER.md).
+- The local runner now supports deterministic Playwright verification for the
+  frozen updates-filter profile. It requires a clean Git baseline and an
+  out-of-band control digest, preserves bounded source/browser observations,
+  blocks external browser HTTP and WebSocket requests, and cleans up the local
+  browser and preview process tree. Arbitrary custom browser criteria remain
+  inconclusive.
 - `updates-filter-smoke-v1` and its incomplete built-in React starter define
   the first no-credential controlled-cloud validation task. Its deterministic
   browser rules have cloud-independent tests. See
@@ -68,7 +74,7 @@ pnpm trial:local
 pnpm --dir fixtures/updates-filter-starter build
 ```
 
-All passed on 2026-07-21. The test suite contains 27 passing tests. `pnpm build`
+All passed on 2026-07-22. The test suite contains 44 passing tests. `pnpm build`
 uses Wrangler's `--containers-rollout=none` dry-run path because Docker is not
 available locally; no Worker or container was deployed.
 
@@ -124,17 +130,28 @@ frozen smoke runs. They do not block the local-first beta.
 1. Have the user complete a short manual acceptance pass through the local
    workbench. The health endpoint was verified, but this UX pass is still
    pending.
-2. Implement deterministic local Playwright verification for the first narrow
-   web-application profile so browser-visible criteria no longer default to
-   `inconclusive`.
-3. Connect the workbench to the agent-neutral local runner, add CI for the
+2. Connect the workbench to the agent-neutral local runner, add CI for the
    established validation commands, and package an installable CLI.
-4. Correct issues found by local acceptance and prepare the `v0.1.0` local beta
+3. Correct issues found by local acceptance and prepare the `v0.1.0` local beta
    before spending on private cloud validation.
-5. Only after exact budget approval and ADR 0007 gate review, deploy with public
+4. Only after exact budget approval and ADR 0007 gate review, deploy with public
    cloud routes disabled and live-test persistence, retention, Access,
    admission, cancellation, and cleanup.
-6. Run `updates-filter-smoke-v1` twice before returning to RealtimeKit.
+5. Run `updates-filter-smoke-v1` twice before returning to RealtimeKit.
+
+## Next Connected Trial
+
+The first user-selected dogfood target is Cloudflare AI Search: create a
+built-in-storage knowledge base from three synthetic internal documents and
+expose its built-in MCP search tool. The website must not request access to a
+user's Cloudflare account. ADR 0008 makes Docs Trials-owned ephemeral resources
+the hosted default and keeps local BYO-account execution as an advanced mode.
+
+The first run is maintainer-only. Preserve the full MCP task even though current
+assigned docs describe public MCP enablement as a dashboard action; an observed
+failure there is a valid finding. Do not create a live resource until the
+checked-in resource envelope, deterministic grader, exact budget, private route,
+and cleanup verification are reviewed.
 
 ## Worktree
 

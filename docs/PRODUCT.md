@@ -19,6 +19,12 @@ Both modes use deterministic checks and produce an evidence-backed report. The
 local mode is the first self-serve release; controlled cloud execution requires
 authenticated admission, fixed budgets, and evidence lifecycle controls.
 
+For supported connected integrations, the hosted mode uses temporary
+Docs Trials-owned provider resources. The website does not request access to a
+user's provider account. Advanced local runs may use official provider tooling
+in the user's environment and disclose that weaker credential boundary. See
+[ADR 0008](decisions/0008-hosted-connected-trial-resources.md).
+
 The central unit is a **trial**:
 
 ```txt

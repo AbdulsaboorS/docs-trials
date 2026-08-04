@@ -1,5 +1,5 @@
 import { realtimekitTrial } from "./fixture";
-import { runLocalTrial } from "./local-runner";
+import { restoreSyntheticRealtimeKitRun, runLocalTrial } from "./local-runner";
 import type { PlatformEnv } from "./platform-env";
 
 export { Sandbox } from "@cloudflare/sandbox";
@@ -32,6 +32,18 @@ export default {
       ].includes(url.pathname)
     ) {
       return Response.json(runLocalTrial(realtimekitTrial));
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/api/local-runs/")) {
+      let runId: string;
+      try {
+        runId = decodeURIComponent(url.pathname.slice("/api/local-runs/".length));
+      } catch {
+        return Response.json({ error: "Synthetic run not found" }, { status: 404 });
+      }
+      const restored = restoreSyntheticRealtimeKitRun(runId);
+      return restored
+        ? Response.json(restored)
+        : Response.json({ error: "Synthetic run not found" }, { status: 404 });
     }
     if (request.method === "POST" && url.pathname === "/api/trials/realtimekit-video-room-v1/run") {
       return cloudExecutionDisabled();

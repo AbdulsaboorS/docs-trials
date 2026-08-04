@@ -31,6 +31,19 @@ The primary action is explicit:
 Run baseline trial
 ```
 
+### Custom Trial Authoring
+
+The default authoring flow asks for a documentation URL and a plain-language
+goal. Docs Trials proposes the starter, synthetic fixtures, prerequisites,
+credential names, deterministic checks, side effects, and cleanup policy. The
+user reviews and approves the frozen manifest; they should not need to design a
+grader or know provider-specific credential fields.
+
+For supported hosted connected trials, the review states that temporary
+resources run in the Docs Trials test environment. The website must not present
+a provider-account OAuth grant as the default path. Advanced local BYO-account
+runs are separately labeled and disclose their weaker credential boundary.
+
 ### Live Trial
 
 Use a three-pane workbench on desktop:

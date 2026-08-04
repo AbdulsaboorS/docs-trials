@@ -8,8 +8,9 @@ Accepted
 
 ADR 0005 subsequently added executable custom local manifests through the
 agent-neutral runner. Custom drafts still do not execute in the controlled
-cloud path, and browser-only local criteria remain inconclusive until the local
-Playwright verifier is implemented.
+cloud path. Browser-only local criteria remain inconclusive unless the draft
+selects a checked-in deterministic profile; the first such profile is the
+internal updates-filter smoke task.
 
 ## Context
 

@@ -11,11 +11,15 @@ prepared but has not been deployed or live-tested. The current release sequence
 is:
 
 1. manually accept the local workbench;
-2. add deterministic local Playwright verification;
-3. connect the workbench and agent-neutral runner;
-4. add CI and package an installable CLI;
-5. privately validate the disabled-route cloud path only after exact budget
+2. connect the workbench and agent-neutral runner;
+3. add CI and package an installable CLI;
+4. privately validate the disabled-route cloud path only after exact budget
    approval and ADR 0007 gate review.
+
+The first connected-profile dogfood target is the AI Search internal knowledge
+trial. Its checked-in contract and synthetic corpus may be prepared before the
+local beta is complete, but live provider mutation remains private and gated by
+ADRs 0007 and 0008. See [`AI_SEARCH_TRIAL.md`](AI_SEARCH_TRIAL.md).
 
 ## Phase 0: Verify External Interfaces
 
@@ -94,11 +98,12 @@ Workflow persistence and the wider cloud path remain unvalidated.
 
 ## Phase 5: Agent-Neutral Local Beta
 
-Implement deterministic Playwright checks for the first local web-application
-profile. Integrate the runner with the existing Kumo workbench, add CI for the
-established validation commands, and package an installable CLI. Local reports
-must continue to disclose agent/model metadata and keep all user inputs and
-evidence in the workspace.
+Deterministic local Playwright checks are implemented for the frozen
+`updates-filter-smoke-v1` profile, including bounded browser observations and an
+independent machine-readable smoke command. Integrate the runner with the
+existing Kumo workbench, add CI for the established validation commands, and
+package an installable CLI. Local reports must continue to disclose agent/model
+metadata and keep all user inputs and evidence in the workspace.
 
 ## Phase 6: Private Cloud Validation
 

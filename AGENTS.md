@@ -19,6 +19,9 @@ Build an open-source platform that determines whether a coding agent can success
 - Anonymous users can create and run local trials only. Their inputs and
   reports remain in their workspace unless they explicitly opt into a future
   cloud-backed run.
+- Supported hosted connected trials use temporary Docs Trials-owned provider
+  resources. The website does not request access to a user's provider account;
+  local BYO-account execution is an explicit advanced mode.
 
 ## Product Rules
 
@@ -37,6 +40,9 @@ Build an open-source platform that determines whether a coding agent can success
 - Keep the first self-serve verification profile narrow: web applications with
   browser-visible acceptance criteria. CLI, server, and connected-integration
   profiles follow after the end-to-end local path works.
+- A private connected-profile dogfood trial may be prepared earlier, but it may
+  mutate live resources only through a reviewed provider adapter and the cloud
+  admission controls.
 
 ## Source Of Truth
 
@@ -60,6 +66,26 @@ When implementation changes a fixed decision, add an ADR instead of silently cha
 - Prefer small, vertically complete changes over framework-first abstractions.
 - Document external API assumptions with a source URL and retrieval date in `research/`.
 - Retrieve current Cloudflare product APIs before implementation. Product APIs and availability may change.
+- Do not preserve backward compatibility. Remove obsolete paths instead of adding compatibility layers, fallbacks, or migrations.
+- Choose the simplest implementation that fully meets the current requirements. Avoid speculative abstractions, configuration, and indirection.
+- Grow the system in layers. Start with the smallest version that works end to end.
+- Add each new capability to a product that already works. Never trade a working product for unfinished complexity.
+- Keep components modular and keep concerns clearly separated.
+- Prefer established, well-maintained libraries when they reduce complexity or improve reliability.
+- Do not reimplement common functions without a clear reason.
+- Use existing project dependencies before you write a new implementation or add packages.
+- Check library documentation and types before you decide that a library does not have a required capability.
+- Make architectural decisions for the long term. Do not accept temporary solutions that you plan to replace.
+- Study how established products solve the problem before you design a solution.
+- Use proven patterns and conventions instead of creating a new approach without a clear reason.
+- When you change keyboard shortcuts, check `keybindings.ts` first.
+- Update the Keyboard Shortcuts dialog when you change a keyboard shortcut.
+- Do not add subtitles, helper text, or descriptive text beneath UI elements by default.
+- Prefer one concise heading or label that explains itself.
+- Add supporting text only when the user requests it or when it prevents an error or misunderstanding.
+- Do not use supporting text to repeat a heading.
+- Do not add code comments that refer to minor events, such as a specific bug fix.
+- Comments can describe important events that explain the current design.
 
 ## Critical Thinking
 
@@ -81,6 +107,20 @@ When implementation changes a fixed decision, add an ADR instead of silently cha
 2. Check whether a similar component, hook, or pattern already exists.
 3. Read `.claude/conventions.md` for naming and placement rules when that file exists.
 4. If you are about to create the 10th or later file in a flat directory, propose reorganization first.
+
+## ASD-STE100 Simplified Technical English
+
+Always respond using ASD-STE100 Simplified Technical English. It is a controlled writing standard. Aerospace and defense groups made it. It helps people write clear technical text.
+
+Key rules:
+
+- **Use approved words only.** The standard gives a word list. Each word has one meaning.
+- **Use one word for one idea.** Do not use two words for the same idea.
+- **Write short sentences.** Use 20 words or less for instructions.
+- **Use active voice.** Write "Turn the switch", not "The switch must be turned".
+- **Write short paragraphs.** Keep one topic in each paragraph.
+
+The goal is easy reading. Many readers are not native English speakers. Clear text helps them do the work safely and correctly.
 
 ## Validation
 

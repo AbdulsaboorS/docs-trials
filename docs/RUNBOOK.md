@@ -24,16 +24,21 @@ real coding agent, Cloudflare service, or RealtimeKit call.
 
 To capture a real external-agent run in the user's workspace:
 
+Begin from a clean committed Git baseline so capture can preserve every source
+change relative to preparation.
+
 ```sh
 pnpm trial:local:prepare -- --manifest trial.manifest.json --workspace .
-pnpm trial:local:capture -- --run .docs-trials/runs/<run-id> --workspace .
+pnpm trial:local:capture -- --run .docs-trials/runs/<run-id> --control-digest <controlSha256> --workspace .
 pnpm trial:local:view -- .docs-trials/runs/<run-id>
 ```
 
 Give the generated `AGENT_INSTRUCTIONS.md` to the user's coding agent between
-`prepare` and `capture`. This path records the verification command and source
-diff. Browser-only criteria remain `inconclusive` until the local Playwright
-verifier is implemented. See [`LOCAL_RUNNER.md`](LOCAL_RUNNER.md).
+`prepare` and `capture`, while retaining the printed control digest outside the
+agent conversation. This path records the verification command and source diff.
+The checked-in updates-filter profile also performs local Playwright checks;
+other browser-only criteria remain `inconclusive`. See
+[`LOCAL_RUNNER.md`](LOCAL_RUNNER.md).
 
 ## Local Workbench Preview
 
@@ -49,18 +54,48 @@ The curated trial's **Run local evidence** action remains fully local and does
 not invoke Think, Sandbox, Browser Run, or RealtimeKit. Its output is explicitly
 labeled as a synthetic report preview, not a completed documentation trial.
 
+After installing local Chromium, verify direct-run refresh recovery and the
+browser-only custom-draft boundary while `dev:local` is running:
+
+```sh
+pnpm smoke:workbench:recovery
+```
+
 ## Current Release Path
 
 Before private cloud validation:
 
 1. Complete a manual acceptance pass through the local workbench.
-2. Add deterministic local Playwright verification so browser-visible criteria
-   no longer default to `inconclusive`.
-3. Connect the workbench to the agent-neutral local runner.
-4. Add CI and package an installable local CLI.
+2. Connect the workbench to the agent-neutral local runner.
+3. Add CI and package an installable local CLI.
 
 These are the local-beta release steps. The cloud controls below do not block
 anonymous local runs.
+
+## AI Search Connected-Trial Preflight
+
+Prepare the credential-free private run package and render its expected
+inconclusive preflight report:
+
+```sh
+pnpm trial:ai-search:prepare -- ais-contract-001
+pnpm trial:ai-search:preflight -- trial-output/ais-contract-001
+```
+
+Preparation retrieves and hashes the three assigned documentation pages, then
+creates an incomplete Worker workspace, three synthetic Markdown documents, a
+content-addressed starter, a SHA-256-bound frozen contract, and agent
+instructions. It creates no Cloudflare resource. Reusing a run ID fails instead
+of overwriting evidence.
+
+The checked-in preflight command generates canonical unavailable observations
+internally and writes one non-overwriting local report set under `preflight/`.
+It cannot accept available or passing observations, and a second invocation
+refuses to overwrite the report. Local files are not an authenticity boundary;
+a future trusted adapter must anchor the admitted contract digest and output
+manifest in versioned storage. Do not run the generated workspace's live
+commands with account credentials available; its `dev` script intentionally
+fails until that adapter exists.
 
 ## Deferred Private-Cloud Deployment
 

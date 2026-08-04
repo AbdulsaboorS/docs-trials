@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { graderResultSchema, trialSpecSchema } from "../src/domain";
 import { realtimekitTrial, updatesFilterSmokeTrial } from "../src/fixture";
-import { runLocalTrial } from "../src/local-runner";
+import { restoreSyntheticRealtimeKitRun, runLocalTrial } from "../src/local-runner";
 import { redact } from "../src/redact";
 
 describe("trial domain", () => {
@@ -90,10 +90,22 @@ describe("trial domain", () => {
     expect(result.report.outcome).toBe("passed");
     expect(result.run.graderResults).toHaveLength(realtimekitTrial.acceptanceCriteria.length);
     expect(result.run.graderResults.every((grader) => grader.outcome === "passed")).toBe(true);
+    expect(result.run.events).toHaveLength(12);
     expect(result.report.markdown).toContain("# Agent Experience Report");
     expect(result.report.markdown).toContain("Synthetic local test double");
     expect(result.run.evidence.every((evidence) => !evidence.content.includes("test-token"))).toBe(
       true,
     );
+  });
+
+  it("restores only valid deterministic RealtimeKit run IDs", () => {
+    const original = runLocalTrial(realtimekitTrial, new Date("2026-07-16T12:00:00.000Z"));
+    const restored = restoreSyntheticRealtimeKitRun(original.run.id);
+
+    expect(restored).toEqual(original);
+    expect(restoreSyntheticRealtimeKitRun("local-agent-preview")).toBeUndefined();
+    expect(
+      restoreSyntheticRealtimeKitRun("realtimekit-video-room-v1-not-a-timestamp"),
+    ).toBeUndefined();
   });
 });

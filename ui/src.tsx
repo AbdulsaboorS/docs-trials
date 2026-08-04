@@ -1,34 +1,16 @@
 import { Button } from "@cloudflare/kumo";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { parseResultForRun, type Result } from "./result-schema";
+import {
+  resultMatchesRunPath,
+  runIdFromPath,
+  sampleSyntheticRunId,
+  unsupportedCustomRunId,
+} from "./run-route";
 import "./styles.css";
 
 type Trial = { id: string; title: string; task: string; acceptanceCriteria: string[] };
-type Result = {
-  report: {
-    runId: string;
-    outcome: "passed" | "failed" | "inconclusive";
-    markdown: string;
-  };
-  run: {
-    id: string;
-    status: "pending" | "running" | "passed" | "failed" | "inconclusive" | "cancelled";
-    startedAt: string;
-    completedAt?: string;
-    events: Array<{
-      id: string;
-      at: string;
-      phase: "prepare" | "execute" | "build" | "preview" | "verify" | "report";
-      type: "started" | "completed" | "failed" | "log";
-      message: string;
-      evidenceIds: string[];
-    }>;
-    graderResults: Array<{
-      criterion: string;
-      outcome: "passed" | "failed" | "inconclusive";
-    }>;
-  };
-};
 type Draft = {
   title: string;
   task: string;
@@ -90,42 +72,66 @@ const phaseLabels = {
   report: "Assemble redacted evidence and AX.md",
 } as const;
 
-const sampleReport = `# Agent Experience Report
-
-## Evidence Mode
-
-Illustrative sample only. No coding agent, Sandbox, or Browser Run session was executed.
-
-## Outcome
-
-**PASSED** for \`RealtimeKit two-participant React video room\`.
-
-## Deterministic Results
-
-| Result | Criterion | Evidence |
-|---|---|---|
-| PASS | Application installs and builds | command-03 |
-| PASS | Preview is reachable | preview-01 |
-| PASS | Two participants can join | browser-02 |
-| PASS | Leave and rejoin restores state | browser-02 |
-
-## Diagnostic
-
-No deterministic criterion failed. No documentation recommendation was generated.`;
-
 function App() {
   const [path, setPath] = useState(window.location.pathname);
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [trial, setTrial] = useState<Trial>();
   const [result, setResult] = useState<Result>();
+  const [resultLoading, setResultLoading] = useState(false);
+  const [resultError, setResultError] = useState<string>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
+  const requestedRunId = runIdFromPath(path);
+  const currentResultRunId = result?.run.id;
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    if (!path.startsWith("/runs/") && !path.startsWith("/reports/")) {
+      setResultLoading(false);
+      setResultError(undefined);
+      return;
+    }
+    const runId = requestedRunId;
+    if (!runId) {
+      setResultLoading(false);
+      setResultError("This run URL is invalid.");
+      return;
+    }
+    if (currentResultRunId === runId) {
+      setResultLoading(false);
+      setResultError(undefined);
+      return;
+    }
+    if (runId === unsupportedCustomRunId) {
+      setResultLoading(false);
+      setResultError(
+        "Custom drafts do not execute in the browser yet. Use the agent-neutral CLI runner from a clean local workspace.",
+      );
+      return;
+    }
+
+    const controller = new AbortController();
+    setResultLoading(true);
+    setResultError(undefined);
+    void fetch(`/api/local-runs/${encodeURIComponent(runId)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("This synthetic run package is unavailable.");
+        setResult(parseResultForRun(await response.json(), runId));
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setResultError(cause instanceof Error ? cause.message : "The run package could not load.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setResultLoading(false);
+      });
+    return () => controller.abort();
+  }, [path, requestedRunId, currentResultRunId]);
 
   function navigate(nextPath: string) {
     window.history.pushState({}, "", nextPath);
@@ -160,7 +166,7 @@ function App() {
         method: "POST",
       });
       if (!response.ok) throw new Error("Unable to generate the synthetic report preview.");
-      const packageResult = (await response.json()) as Result;
+      const packageResult = parseResultForRun(await response.json());
       setResult(packageResult);
       navigate(`/runs/${packageResult.run.id}`);
     } catch (cause) {
@@ -170,6 +176,7 @@ function App() {
     }
   }
 
+  const routedResult = resultMatchesRunPath(path, result?.run.id) ? result : undefined;
   const page = path.startsWith("/trials/new") ? (
     <Builder draft={draft} setDraft={setDraft} navigate={navigate} />
   ) : path.startsWith("/trials/realtimekit-video-room-v1/review") ? (
@@ -177,9 +184,19 @@ function App() {
   ) : path.startsWith("/trials/custom/review") ? (
     <ReviewDraft draft={draft} navigate={navigate} />
   ) : path.startsWith("/runs/") ? (
-    <RunScreen result={result} navigate={navigate} />
+    <RunScreen
+      result={routedResult}
+      loading={resultLoading}
+      loadError={resultError}
+      navigate={navigate}
+    />
   ) : path.startsWith("/reports/") ? (
-    <Report result={result} navigate={navigate} />
+    <Report
+      result={routedResult}
+      loading={resultLoading}
+      loadError={resultError}
+      navigate={navigate}
+    />
   ) : (
     <Home navigate={navigate} loadTrial={loadTrial} />
   );
@@ -319,7 +336,7 @@ function Home({
             <Button variant="secondary" onClick={loadTrial}>
               Inspect contract
             </Button>
-            <Button onClick={() => navigate("/reports/local-realtimekit-sample")}>
+            <Button onClick={() => navigate(`/reports/${sampleSyntheticRunId}`)}>
               View sample report
             </Button>
           </div>
@@ -334,7 +351,7 @@ function Home({
             <p className="eyebrow">REPORT STANDARD</p>
             <h2 id="report-title">Evidence before conclusions.</h2>
           </div>
-          <Button variant="secondary" onClick={() => navigate("/reports/local-realtimekit-sample")}>
+          <Button variant="secondary" onClick={() => navigate(`/reports/${sampleSyntheticRunId}`)}>
             Open report
           </Button>
         </div>
@@ -517,8 +534,8 @@ function Builder({
             <li>Do not paste secrets into docs or task text.</li>
           </ul>
           <p className="draft-fine-print">
-            Your draft stays in this browser until the local runner is installed. It is not
-            submitted or stored.
+            Your draft is held only in page memory. Refreshing or closing this tab discards it; it
+            is not submitted or stored.
           </p>
         </aside>
       </div>
@@ -574,11 +591,18 @@ function ReviewDraft({ draft, navigate }: { draft: Draft; navigate: (path: strin
         "Preview starts and can be opened in a browser",
         "The documented user flow has browser-visible checks",
       ]}
-      criteriaSource="Suggested starting checks for the web-app profile"
-      requireCriteriaApproval
+      criteriaSource="Draft checks for the future local-runner connection"
       navigate={navigate}
-      primaryLabel="Prepare local agent run"
-      primaryAction={() => navigate("/runs/local-agent-preview")}
+      primaryLabel="Local runner connection coming next"
+      primaryAction={() => undefined}
+      showPrimaryAction={false}
+      primaryNote="This draft is held only in page memory and is lost on refresh. Today, execution uses the agent-neutral CLI runner from a clean local workspace; the workbench is not connected to it yet."
+      sealLabel="BROWSER-ONLY DRAFT"
+      sidebarTitle="Drafted locally, not executed."
+      sidebarDescription="This draft remains only in page memory and is lost on refresh. It does not create artifacts, invoke an agent, or start the CLI runner."
+      heading="Review this browser-only draft."
+      runExplanation="The workbench does not execute this draft or collect evidence yet. Use the agent-neutral CLI runner separately from a clean local workspace."
+      eyebrow="DRAFT REVIEW / 02 CHECK"
     />
   );
 }
@@ -592,6 +616,15 @@ function Manifest({
   navigate,
   primaryLabel,
   primaryAction,
+  primaryDisabled = false,
+  primaryNote,
+  showPrimaryAction = true,
+  sealLabel = "PENDING FREEZE",
+  sidebarTitle = "Local by default.",
+  sidebarDescription = "The first self-serve path opens a local report viewer and writes downloadable redacted artifacts. It does not upload your source or pasted docs.",
+  heading = "Review the task before your agent starts.",
+  runExplanation = "Your coding agent works in your workspace. Docs Trials collects redacted evidence and checks the result.",
+  eyebrow = "MANIFEST REVIEW / 02 FREEZE",
   loading,
 }: {
   title: string;
@@ -602,14 +635,23 @@ function Manifest({
   navigate: (path: string) => void;
   primaryLabel: string;
   primaryAction: () => void;
+  primaryDisabled?: boolean;
+  primaryNote?: string;
+  showPrimaryAction?: boolean;
+  sealLabel?: string;
+  sidebarTitle?: string;
+  sidebarDescription?: string;
+  heading?: string;
+  runExplanation?: string;
+  eyebrow?: string;
   loading?: boolean;
 }) {
   const [criteriaApproved, setCriteriaApproved] = useState(!requireCriteriaApproval);
   return (
     <section className="route-section">
       <RouteTrail navigate={navigate} current="Review trial" />
-      <p className="eyebrow">MANIFEST REVIEW / 02 FREEZE</p>
-      <h1>Review the task before your agent starts.</h1>
+      <p className="eyebrow">{eyebrow}</p>
+      <h1>{heading}</h1>
       <div className="manifest-layout">
         <article className="contract-panel">
           <div className="contract-heading">
@@ -617,7 +659,7 @@ function Manifest({
               <p className="eyebrow">TRIAL CONTRACT</p>
               <h3>{title}</h3>
             </div>
-            <span className="seal">PENDING FREEZE</span>
+            <span className="seal">{sealLabel}</span>
           </div>
           <p>{task}</p>
           <div className="contract-grid contract-grid-plain">
@@ -647,24 +689,25 @@ function Manifest({
                 or other secrets.
               </p>
               <h4>How this run works</h4>
-              <p>
-                Your coding agent works in your workspace. Docs Trials collects redacted evidence
-                and checks the result.
-              </p>
+              <p>{runExplanation}</p>
             </div>
           </div>
         </article>
         <aside className="review-sidebar">
           <p className="eyebrow">RUN PRIVACY</p>
-          <h3>Local by default.</h3>
-          <p>
-            The first self-serve path opens a local report viewer and writes downloadable redacted
-            artifacts. It does not upload your source or pasted docs.
-          </p>
-          <Button loading={loading ?? false} disabled={!criteriaApproved} onClick={primaryAction}>
-            {primaryLabel}
-          </Button>
-          {requireCriteriaApproval ? (
+          <h3>{sidebarTitle}</h3>
+          <p>{sidebarDescription}</p>
+          {showPrimaryAction ? (
+            <Button
+              loading={loading ?? false}
+              disabled={primaryDisabled || !criteriaApproved}
+              onClick={primaryAction}
+            >
+              {primaryLabel}
+            </Button>
+          ) : null}
+          {primaryNote ? <p className="approval-note">{primaryNote}</p> : null}
+          {requireCriteriaApproval && !criteriaApproved ? (
             <p className="approval-note">
               Approve the suggested checks to continue. You can refine them in a future editing
               step.
@@ -681,9 +724,13 @@ function Manifest({
 
 function RunScreen({
   result,
+  loading,
+  loadError,
   navigate,
 }: {
   result: Result | undefined;
+  loading: boolean;
+  loadError: string | undefined;
   navigate: (path: string) => void;
 }) {
   const events = result?.run.events ?? [];
@@ -703,6 +750,12 @@ function RunScreen({
     }, 450);
     return () => window.clearInterval(timer);
   }, [events]);
+
+  if (!result) {
+    return (
+      <UnavailableRun current="Run trial" loading={loading} error={loadError} navigate={navigate} />
+    );
+  }
 
   const visibleEvents = events.slice(0, visibleCount);
   const replayComplete = events.length > 0 && visibleCount >= events.length;
@@ -786,20 +839,23 @@ function RunScreen({
 
 function Report({
   result,
+  loading,
+  loadError,
   navigate,
 }: {
   result: Result | undefined;
+  loading: boolean;
+  loadError: string | undefined;
   navigate: (path: string) => void;
 }) {
-  const report = result?.report.markdown ?? sampleReport;
-  const outcome = result?.report.outcome ?? "passed";
-  const events = result?.run.events.map((event) => event.message) ?? [
-    "manifest frozen",
-    "agent workspace prepared",
-    "preview verified",
-    "browser evidence captured",
-    "report rendered",
-  ];
+  if (!result) {
+    return (
+      <UnavailableRun current="Report" loading={loading} error={loadError} navigate={navigate} />
+    );
+  }
+  const report = result.report.markdown;
+  const outcome = result.report.outcome;
+  const events = result.run.events.map((event) => event.message);
   return (
     <section className="route-section">
       <RouteTrail navigate={navigate} current="Report" />
@@ -848,6 +904,38 @@ function Report({
           alternative explanations such as missing setup or an agent implementation error.
         </p>
       </section>
+    </section>
+  );
+}
+
+function UnavailableRun({
+  current,
+  loading,
+  error,
+  navigate,
+}: {
+  current: string;
+  loading: boolean;
+  error: string | undefined;
+  navigate: (path: string) => void;
+}) {
+  return (
+    <section className="route-section">
+      <RouteTrail navigate={navigate} current={current} />
+      <p className="eyebrow">LOCAL RUN PACKAGE</p>
+      <div className="contract-panel">
+        <h1>{loading ? "Restoring the synthetic run..." : "This run is not available."}</h1>
+        <p>
+          {loading
+            ? "Docs Trials is reconstructing the deterministic local preview from its run ID."
+            : (error ?? "No run package was supplied for this route.")}
+        </p>
+        {!loading ? (
+          <Button onClick={() => navigate("/trials/realtimekit-video-room-v1/review")}>
+            Return to sample trial
+          </Button>
+        ) : null}
+      </div>
     </section>
   );
 }

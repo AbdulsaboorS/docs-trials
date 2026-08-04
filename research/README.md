@@ -14,5 +14,8 @@ Research files preserve the evidence behind product and implementation choices. 
 - [`realtimekit-agent-dx.md`](realtimekit-agent-dx.md): problem evidence from RealtimeKit proposals and customer discussion.
 - [`platform-capabilities.md`](platform-capabilities.md): dated API findings,
   completed spikes, and remaining deployment-validation questions.
+- [`ai-search-capabilities.md`](ai-search-capabilities.md): current AI Search
+  lifecycle, MCP, pricing, and trust-boundary findings for the first connected
+  trial.
 - [`competitive-landscape.md`](competitive-landscape.md): adjacent products and differentiation.
 - [`trial-methodology.md`](trial-methodology.md): evaluation validity and evidence rules.

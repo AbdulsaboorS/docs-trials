@@ -8,6 +8,7 @@ import {
   type TrialRun,
   type TrialSpec,
 } from "./domain";
+import { realtimekitTrial } from "./fixture";
 import { redact } from "./redact";
 import { renderAXReport } from "./report";
 
@@ -81,4 +82,17 @@ export function runLocalTrial(spec: TrialSpec, at = new Date()): LocalTrialPacka
         "Synthetic local test double for exercising the package and report shape. No coding agent, Sandbox, Browser Run session, or external integration was executed. This outcome is not a documentation finding.",
     }),
   };
+}
+
+export function restoreSyntheticRealtimeKitRun(runId: string): LocalTrialPackage | undefined {
+  const prefix = `${realtimekitTrial.id}-`;
+  if (!runId.startsWith(prefix)) return undefined;
+  const timestamp = runId.slice(prefix.length);
+  if (!/^\d{13}$/.test(timestamp)) return undefined;
+  const milliseconds = Number(timestamp);
+  if (!Number.isSafeInteger(milliseconds)) return undefined;
+  const at = new Date(milliseconds);
+  if (Number.isNaN(at.getTime())) return undefined;
+  const restored = runLocalTrial(realtimekitTrial, at);
+  return restored.run.id === runId ? restored : undefined;
 }

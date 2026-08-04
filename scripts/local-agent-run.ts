@@ -13,18 +13,23 @@ for (let index = 0; index < args.length; index += 2) {
 }
 const manifest = options.get("manifest");
 const run = options.get("run");
+const controlDigest = options.get("control-digest");
 const workspace = options.get("workspace") ?? process.cwd();
 
 if (action === "prepare" && manifest) {
   console.log(
     JSON.stringify(await prepareLocalAgentRun(resolve(manifest), resolve(workspace)), null, 2),
   );
-} else if (action === "capture" && run) {
+} else if (action === "capture" && run && controlDigest) {
   console.log(
-    JSON.stringify(await captureLocalAgentRun(resolve(run), resolve(workspace)), null, 2),
+    JSON.stringify(
+      await captureLocalAgentRun(resolve(run), resolve(workspace), controlDigest),
+      null,
+      2,
+    ),
   );
 } else {
   throw new Error(
-    "Usage: prepare --manifest <file> [--workspace <dir>] | capture --run <dir> [--workspace <dir>]",
+    "Usage: prepare --manifest <file> [--workspace <dir>] | capture --run <dir> --control-digest <sha256> [--workspace <dir>]",
   );
 }

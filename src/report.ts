@@ -3,9 +3,13 @@ import { deriveTrialOutcome, type AXReport, type TrialRun, type TrialSpec } from
 export function renderAXReport(
   spec: TrialSpec,
   run: TrialRun,
-  options: { evidenceMode?: string } = {},
+  options: { evidenceMode?: string; operationalDowngrade?: string } = {},
 ): AXReport {
-  const outcome = deriveTrialOutcome(spec.acceptanceCriteria, run.graderResults);
+  const deterministicOutcome = deriveTrialOutcome(spec.acceptanceCriteria, run.graderResults);
+  const outcome = options.operationalDowngrade ? "inconclusive" : deterministicOutcome;
+  if (run.status !== outcome) {
+    throw new Error(`Run status ${run.status} does not match report outcome ${outcome}.`);
+  }
   const expected = new Set(spec.acceptanceCriteria);
   const failed = run.graderResults.filter(
     (result) => expected.has(result.criterion) && result.outcome === "failed",
@@ -45,6 +49,6 @@ export function renderAXReport(
   return {
     runId: run.id,
     outcome,
-    markdown: `# Agent Experience Report\n\n${options.evidenceMode ? `## Evidence Mode\n\n${options.evidenceMode}\n\n` : ""}## Outcome\n\n**${outcome.toUpperCase()}** for \`${spec.title}\` (run \`${run.id}\`).\n\n## Frozen Inputs\n\n- Trial specification: \`${spec.id}\`\n- Starter repository: ${spec.starterRepository.source} @ \`${spec.starterRepository.revision}\`\n- Resources: ${spec.resources.map((resource) => resource.locator).join(", ")}\n\n## Deterministic Results\n\n| Result | Criterion | Detail | Evidence |\n|---|---|---|---|\n${resultLines}\n\n## Deterministic Failures\n\n${failed.length === 0 ? "No deterministic acceptance criterion failed." : failed.map((result) => `- ${result.criterion}: ${result.detail}`).join("\n")}\n\n## Unresolved Verification\n\n${unresolvedLines.length === 0 ? "All frozen criteria reached exactly one deterministic result." : `${unresolvedLines.join("\n")}\n\nAn inconclusive result means there is not enough deterministic evidence. It is not a documentation failure.`}\n\n## Evidence\n\n${run.evidence.map((evidence) => `- \`${evidence.id}\` (${evidence.kind}, ${evidence.mediaType})`).join("\n")}\n`,
+    markdown: `# Agent Experience Report\n\n${options.evidenceMode ? `## Evidence Mode\n\n${options.evidenceMode}\n\n` : ""}${options.operationalDowngrade ? `## Operational Downgrade\n\n${options.operationalDowngrade}\n\n` : ""}## Outcome\n\n**${outcome.toUpperCase()}** for \`${spec.title}\` (run \`${run.id}\`).\n\n## Frozen Inputs\n\n- Trial specification: \`${spec.id}\`\n- Starter repository: ${spec.starterRepository.source} @ \`${spec.starterRepository.revision}\`\n- Resources: ${spec.resources.map((resource) => resource.locator).join(", ")}\n\n## Deterministic Results\n\n| Result | Criterion | Detail | Evidence |\n|---|---|---|---|\n${resultLines}\n\n## Deterministic Failures\n\n${failed.length === 0 ? "No deterministic acceptance criterion failed." : failed.map((result) => `- ${result.criterion}: ${result.detail}`).join("\n")}\n\n## Unresolved Verification\n\n${unresolvedLines.length === 0 ? "All frozen criteria reached exactly one deterministic result." : `${unresolvedLines.join("\n")}\n\nAn inconclusive result means there is not enough deterministic evidence. It is not a documentation failure.`}\n\n## Evidence\n\n${run.evidence.map((evidence) => `- \`${evidence.id}\` (${evidence.kind}, ${evidence.mediaType})`).join("\n")}\n`,
   };
 }

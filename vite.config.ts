@@ -3,18 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { defineConfig } from "vite";
-
-const smokeStarterFiles = [
-  "README.md",
-  "index.html",
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-  "src/App.jsx",
-  "src/main.jsx",
-  "src/styles.css",
-  "vite.config.js",
-];
+import { builtInStarterManifests } from "./src/starter-assets";
 
 export default defineConfig({
   root: "ui",
@@ -22,13 +11,15 @@ export default defineConfig({
     react(),
     tailwindcss(),
     {
-      name: "copy-smoke-starter",
+      name: "copy-built-in-starters",
       apply: "build",
       async writeBundle() {
-        for (const file of smokeStarterFiles) {
-          const destination = resolve("dist", "_starters", "updates-filter-starter-v1", file);
-          await mkdir(dirname(destination), { recursive: true });
-          await copyFile(resolve("fixtures", "updates-filter-starter", file), destination);
+        for (const starter of Object.values(builtInStarterManifests)) {
+          for (const file of starter.files) {
+            const destination = resolve("dist", "_starters", starter.assetDirectory, file);
+            await mkdir(dirname(destination), { recursive: true });
+            await copyFile(resolve(starter.sourceDirectory, file), destination);
+          }
         }
       },
     },

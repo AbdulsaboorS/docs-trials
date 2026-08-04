@@ -33,7 +33,11 @@ export type SmokeBuildResult = {
 
 export type SmokePreviewResult =
   | { available: true; processId: string; url: string }
-  | { available: false; detail: string; failureKind: "application" | "infrastructure" };
+  | {
+      available: false;
+      detail: string;
+      failureKind: "application" | "infrastructure" | "skipped";
+    };
 
 export function appendBoundedBrowserMessage(
   target: string[],

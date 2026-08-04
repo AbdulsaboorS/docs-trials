@@ -43,6 +43,23 @@ describe("trial outcome and report", () => {
     expect(renderAXReport(updatesFilterSmokeTrial, withResults(results)).outcome).toBe("failed");
   });
 
+  it("permits only an explained operational downgrade", () => {
+    const results = base.run.graderResults.map((result, index) => ({
+      ...result,
+      outcome: index === 0 ? ("failed" as const) : result.outcome,
+    }));
+    const run = { ...withResults(results), status: "inconclusive" as const };
+    const report = renderAXReport(updatesFilterSmokeTrial, run, {
+      operationalDowngrade: "Cleanup verification was unavailable.",
+    });
+
+    expect(report.outcome).toBe("inconclusive");
+    expect(report.markdown).toContain("**INCONCLUSIVE**");
+    expect(report.markdown).toContain("| FAILED |");
+    expect(report.markdown).toContain("Cleanup verification was unavailable.");
+    expect(() => renderAXReport(updatesFilterSmokeTrial, run)).toThrow("does not match");
+  });
+
   it("reports an environment interruption as unresolved rather than a docs failure", () => {
     const results = base.run.graderResults.map((result, index) =>
       index === 2
