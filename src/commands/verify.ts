@@ -3,7 +3,6 @@ import { deriveOutcome } from "../core/outcome";
 import { renderReport } from "../core/report";
 import {
   readRunRecord,
-  resolveRunDirectory,
   runDirectory,
   writeArtifact,
   writeEvidence,
@@ -14,7 +13,6 @@ import { readDiff } from "../util/git";
 export type VerifyOptions = { run: string; quiet: boolean };
 
 export async function verify(options: VerifyOptions) {
-  await resolveRunDirectory(options.run);
   const record = await readRunRecord(options.run);
   const startedAt = new Date().toISOString();
   const report = options.quiet ? () => {} : (line: string) => process.stderr.write(`  ${line}\n`);

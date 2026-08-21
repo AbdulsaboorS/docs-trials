@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
-import { manifestSchema } from "./manifest";
+import { digestManifest, manifestSchema } from "./manifest";
 import { checkResultSchema, outcomeSchema } from "./outcome";
 import { redact } from "./redact";
 
@@ -67,6 +67,10 @@ export async function writeRunRecord(record: RunRecord): Promise<string> {
 
 export async function readRunRecord(runIdOrPath: string): Promise<RunRecord> {
   const directory = await resolveRunDirectory(runIdOrPath);
+  return readRunRecordFromDirectory(directory);
+}
+
+async function readRunRecordFromDirectory(directory: string): Promise<RunRecord> {
   const path = join(directory, "run.json");
   let raw: string;
   try {
@@ -74,7 +78,16 @@ export async function readRunRecord(runIdOrPath: string): Promise<RunRecord> {
   } catch {
     throw new Error(`No run record at ${path}. Run \`docs-trials prepare\` first.`);
   }
-  return runRecordSchema.parse(JSON.parse(raw));
+  let record: RunRecord;
+  try {
+    record = runRecordSchema.parse(JSON.parse(raw));
+  } catch (cause) {
+    throw new Error(`Invalid run record at ${path}.`, { cause });
+  }
+  if (digestManifest(record.manifest) !== record.manifestDigest) {
+    throw new Error(`The manifest digest does not match the manifest in ${path}.`);
+  }
+  return record;
 }
 
 /** Accepts a run id, a run directory, or `latest`. */
@@ -97,7 +110,24 @@ export async function latestRunId(): Promise<string | undefined> {
   } catch {
     return undefined;
   }
-  return entries.sort().at(-1);
+  let latest: RunRecord | undefined;
+  let latestPreparedAt = Number.NEGATIVE_INFINITY;
+  for (const entry of entries) {
+    const record = await readRunRecordFromDirectory(join(runsRoot(), entry));
+    if (record.runId !== entry) {
+      throw new Error(`Invalid run record: ${entry}/run.json declares run id ${record.runId}.`);
+    }
+    const preparedAt = Date.parse(record.preparedAt);
+    if (
+      !latest ||
+      preparedAt > latestPreparedAt ||
+      (preparedAt === latestPreparedAt && record.runId > latest.runId)
+    ) {
+      latest = record;
+      latestPreparedAt = preparedAt;
+    }
+  }
+  return latest?.runId;
 }
 
 export async function writeEvidence(runId: string, id: string, content: string): Promise<string> {
