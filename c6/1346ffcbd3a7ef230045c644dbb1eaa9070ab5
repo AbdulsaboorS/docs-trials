@@ -1,0 +1,63 @@
+pnpm-lock.yaml
+  s_c55110fac61470::t_894adc5e7ee9d5 20-22,35-37,401-586,1110,1522-1537,2065-2123,2657-2678
+src/core/manifest.ts
+  s_c55110fac61470::t_74856f0d66f1b8 5-10,22,80-84
+tools/oxlint/anti-slop/effect/index.ts
+  s_c55110fac61470::t_bfb85cf516ea35 1-13
+tools/oxlint/anti-slop/effect/rules/no-service-constructor-imports.ts
+  s_c55110fac61470::t_393aeab88035e9 1-52
+tools/oxlint/anti-slop/index.ts
+  s_c55110fac61470::t_2ce0fe6bf9dce5 1-41
+tools/oxlint/anti-slop/rules/no-chained-type-assertions.ts
+  s_c55110fac61470::t_447fadf47cff5b 1-77
+tools/oxlint/anti-slop/rules/no-conditional-empty-object-spread.ts
+  s_c55110fac61470::t_29298e1c3870bc 1-49
+tools/oxlint/anti-slop/rules/no-known-value-widening.ts
+  s_c55110fac61470::t_be3a49c4045255 1-247
+tools/oxlint/anti-slop/rules/no-module-mocking.ts
+  s_c55110fac61470::t_cbb75ad2f4f0a2 1-91
+tools/oxlint/anti-slop/rules/no-object-parameters.ts
+  s_c55110fac61470::t_34fc8acf3154a6 1-126
+tools/oxlint/anti-slop/rules/no-reflect-apply.ts
+  s_c55110fac61470::t_721d39ffebc683 1-28
+tools/oxlint/anti-slop/rules/no-reflect-get.ts
+  s_c55110fac61470::t_f7b08c79d8ffb3 1-28
+tools/oxlint/anti-slop/rules/no-runtime-typeof.ts
+  s_c55110fac61470::t_7496782a79be33 1-67
+tools/oxlint/anti-slop/rules/no-shape-in-symbol-names.ts
+  s_c55110fac61470::t_c4dfda8b84fd66 1-39
+tools/oxlint/anti-slop/rules/no-unknown-parameters.ts
+  s_c55110fac61470::t_adabd509567158 1-83
+tools/oxlint/anti-slop/rules/no-unknown-returns.ts
+  s_c55110fac61470::t_1adff26e76b85b 1-115
+tools/oxlint/anti-slop/rules/no-unknown-type-aliases.ts
+  s_c55110fac61470::t_ab63370b05fa16 1-70
+tools/oxlint/anti-slop/rules/no-unsafe-dictionary-type.ts
+  s_c55110fac61470::t_75434109591fb5 1-134
+tools/oxlint/anti-slop/rules/no-widen-then-assert.ts
+  s_c55110fac61470::t_ee8ea2f4853398 1-366
+tools/oxlint/anti-slop/rules/require-safety-comment-for-type-assertion.ts
+  s_c55110fac61470::t_59e380d6047347 1-62
+tools/oxlint/anti-slop/shared/dictionary-types.ts
+  s_c55110fac61470::t_07d87c1bc5e5ce 1-502
+tools/oxlint/anti-slop/shared/lexical-type-parameters.ts
+  s_c55110fac61470::t_cc983701b155a8 1-61
+tools/oxlint/anti-slop/shared/reflect-method.ts
+  s_c55110fac61470::t_5517b2584d8689 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c61346ffcbd3a7ef230045c644dbb1eaa9070ab5",
+  "prompts": {},
+  "sessions": {
+    "s_c55110fac61470": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fddb4464cffek9RopLW31N1gDR",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
