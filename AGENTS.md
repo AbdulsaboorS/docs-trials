@@ -1,110 +1,90 @@
 # Docs Trials Agent Guide
 
-## Mission
+## Start Every Session
 
-Ship a command line tool that tells a documentation team whether an AI coding
-agent can build a working integration from their docs, backed by evidence a
-sceptic can check.
+1. Read this guide, `CONTEXT.md`, `docs/PRODUCT.md`, and `SESSION_CONTEXT.md`.
+2. Check Git status and recent commits before changing files.
+3. Read the files named in `SESSION_CONTEXT.md`.
+4. Verify current behavior and preserve unrelated changes.
 
-## The rule that matters most
+## Mission And Honesty
 
-**Never report a result the code did not observe.**
+Ship a local CLI that tests whether an AI agent can build from documentation.
+Back every result with evidence that a sceptic can check.
 
-An earlier version of this project assigned a shell command's exit code to
-whichever author criterion happened to be first. `echo hello` produced a report
-that read `PASSED — A customer can complete a Stripe Checkout payment`. That
-bug was possible because results were keyed by user text.
+**Never report a result that the code did not observe.**
 
-Results are now keyed by a `CheckId` defined in `src/core/outcome.ts`. Every
-check is code in this package. An author's `goals` are recorded and explicitly
-not graded. Keep it that way. If you add a result type, add the check that
-produces it first.
+- Results remain keyed by `CheckId` in `src/core/outcome.ts`.
+- Author goals are context only. Never grade them.
+- Every observation must affect a check or be marked as ungraded.
+- Never imply that ungraded evidence was checked.
+- State what a check observed, not what it might imply.
+- A run failure needs evidence before it becomes a documentation finding.
+- Make every public claim reproducible with the tool.
 
-## Fixed decisions
+## Fixed Decisions
 
 - Name: `docs-trials`. Apache-2.0. Public.
-- A local CLI. Execution never leaves the user's machine.
-- Deterministic checks own the outcome. A model may explain a result. It may
-  never change one.
-- Three outcomes: `passed`, `failed`, `inconclusive`. Missing evidence is
-  `inconclusive`, never `failed`.
-- Infrastructure trouble is never reported as an application defect. A busy
-  port, an absent browser, or a skipped step is `inconclusive`.
-- Runs are stored outside the workspace so the agent under test cannot read the
-  manifest or rewrite its own instructions.
-- Evidence is redacted before it is written, and redaction masks values without
-  rewriting the surrounding text.
-- The archived Cloudflare Workers implementation is at tag
-  `archive/cloud-path-v0`. Do not resurrect it piecemeal.
+- Execution stays local for v0.
+- Deterministic checks own outcomes. Models cannot change them.
+- Outcomes are `passed`, `failed`, and `inconclusive`.
+- Missing evidence and infrastructure trouble are `inconclusive`.
+- Runs stay outside the workspace but have no same-user isolation.
+- Redact evidence before writing it without changing nearby text.
+- The old Workers design stays at `archive/cloud-path-v0`.
+- Do not start v1 until ten real, unsteered v0 trials complete Gate 2.
 
-## Planned architecture
+## Workflow
 
-Execution stays local. Cloud services earn their place on the sharing surface,
-not the running surface.
+- Plan architectural, ambiguous, or multi-step work after inspection.
+- Include verification and revise the plan when evidence changes it.
+- Implement small, clear changes directly.
+- Use focused subagents for independent research, review, and parallel work.
+- Do not delegate simple work or duplicate work between agents.
+- Track substantial implementation with task tools, not new planning files.
+- Report material decisions, blockers, changes, and verification.
+- Find the cause of user corrections and add only durable lessons.
+- Reproduce bugs when practical and fix their root cause autonomously.
+- Ask one concise question only when missing information blocks safe work.
 
-| Stage    | Scope                                                                                                         |
-| -------- | ------------------------------------------------------------------------------------------------------------- |
-| v0 (now) | CLI. Baseline checks. No network dependency.                                                                  |
-| v1       | `docs-trials publish` — Worker + R2 + D1 + Turnstile to host a report at a URL.                               |
-| v2       | Task-specific checks proposed from the docs, approved by the author, frozen before the run, executed locally. |
-| v3       | Hosted runs, if users ask for them. Workflows, Sandbox, Browser Rendering, Containers.                        |
+## Critical And Structural Thinking
 
-Do not start a later stage before the one before it has users.
+- Question the premise and current structure before adding to them.
+- Check requests against established conventions.
+- Present valid interpretations instead of choosing silently.
+- Say "I do not know" rather than guess.
+- Raise unclear names before committing.
+- Inspect the target directory and find similar code before creating files.
+- Read `.claude/conventions.md` when it exists.
+- Assess cohesion before adding to a flat directory with 10 to 12 files.
+- Do not reorganize by file count alone or abstract incidental similarity.
+- Prefer the simplest coherent solution. Do not over-engineer obvious fixes.
 
-## Honesty rules
+## Engineering Principles
 
-- State what a check observed, not what it implies.
-- A failure is a fact about the run. It becomes a documentation finding only
-  when the evidence supports that attribution.
-- Every claim in the README must be reproducible by running the tool.
-- Do not describe unbuilt capability in the present tense.
-- Disclose the limits: pretrained knowledge, run-to-run variance, unenforced
-  doc scope, unsandboxed commands.
+- Use strict TypeScript, `pnpm`, and Node 22 or later.
+- Validate process, network, and file boundaries with Zod.
+- Change only what current requirements need.
+- Do not preserve compatibility without a concrete requirement.
+- Remove obsolete paths instead of adding fallback layers.
+- Grow through working end-to-end layers.
+- Keep responsibilities clear and modules cohesive.
+- Check current dependencies, docs, and types before adding code or packages.
+- Prefer maintained libraries when they reduce total complexity or risk.
+- Avoid known dead ends without designing for hypothetical work.
+- Run working code before writing more than one day of changes.
+- Cleanup must never discard a completed run.
 
-## Engineering conventions
+## Text, Verification, And Handoff
 
-- TypeScript, strict, `pnpm`, Node 22+.
-- Validate anything crossing a process or file boundary with Zod.
-- Choose the simplest implementation that meets the current requirement.
-- Grow in layers. Add capability to a product that already works.
-- Prefer established libraries. Check their types before deciding they lack a
-  capability.
-- Do not keep backward compatibility. Delete obsolete paths.
-- No speculative abstraction. An interface with one implementation and one test
-  double is not worth its cost.
-- Do not write more than a day of code before running it. This project's worst
-  failure was 2,100 lines written before a single deployment.
-- Cleanup must never throw away a completed run.
-- Comments explain a design decision. They do not narrate a bug fix.
-
-## Critical thinking
-
-- Question the premise before adding to it.
-- Say "I do not know" instead of guessing.
-- If multiple readings exist, present them rather than picking one silently.
-- If a name feels wrong, raise it before committing.
-
-## ASD-STE100 Simplified Technical English
-
-Write documentation and user-facing text in Simplified Technical English.
-
-- One word, one meaning.
-- Short sentences. Twenty words or fewer for an instruction.
-- Active voice: "Stop the process", not "The process must be stopped".
-- One topic per paragraph.
-
-## Validation
-
-```sh
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-```
-
-`pnpm test` includes an integration suite that starts real servers and drives a
-real Chromium. Install it once with
-`pnpm exec playwright install chromium chromium-headless-shell`.
-
-Before you call a change to the check pipeline complete, run a real trial
-against real third-party documentation and read the report.
+- Use concise labels. Add supporting text only to prevent misunderstanding.
+- Comments explain lasting decisions, constraints, or non-obvious behavior.
+- Use Simplified Technical English principles in user-facing text.
+- Do not claim strict ASD-STE100 compliance without its approved word list.
+- Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+- For check changes, run a real trial and read the generated report.
+- Update `SESSION_CONTEXT.md` after substantial work; replace its contents.
+- Keep only the last summary, next work, blockers, and required files there.
+- `AGENTS.md` must never exceed 90 lines.
+- `SESSION_CONTEXT.md` must never exceed 50 lines.
+- Keep detailed research and exploit reports outside the public repository.

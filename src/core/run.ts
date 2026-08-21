@@ -9,10 +9,9 @@ import { redact } from "./redact";
 /**
  * Runs live outside the workspace the agent is working in.
  *
- * The agent must not be able to read the manifest, rewrite its own
- * instructions, or see the run record. Keeping the run directory out of the
- * workspace removes that whole class of tampering, and it stops Docs Trials
- * from dirtying the Git baseline it just recorded.
+ * Keeping the run directory out of the workspace stops Docs Trials from
+ * dirtying the Git baseline it records. It does not isolate the record from
+ * other processes that use the operator's account.
  */
 export function runsRoot(): string {
   return process.env.DOCS_TRIALS_HOME

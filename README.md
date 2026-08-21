@@ -121,9 +121,9 @@ evidence/browser.txt     console, network, origins, captured assets, body text
 evidence/source-diff.txt what the agent changed, against the Git baseline
 ```
 
-Runs are stored outside your workspace, so the agent cannot read the manifest,
-rewrite its own instructions, or dirty the baseline being recorded. Evidence is
-redacted before it is written.
+Runs are stored outside your workspace so Docs Trials does not dirty the Git
+baseline it records. This does not isolate runs from processes that use your
+operating-system account. Evidence is redacted before it is written.
 
 ## Limits
 
