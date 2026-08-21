@@ -1,0 +1,59 @@
+.github/workflows/ci.yml
+  s_ccbf1bdd2d2315::t_9a4891db92c8c1 1-24
+AGENTS.md
+  s_4b57adba1f5472::t_09c3847607052a 3,5-8,10,12-13,15,17-23,25,28-90
+CONTEXT.md
+  s_4b57adba1f5472::t_547a6f2c1832b6 1-66
+README.md
+  s_6feff1dfeb5a4a::t_10d8c313e03153 124-126
+SESSION_CONTEXT.md
+  s_4b57adba1f5472::t_4ec5c18b26f28b 1-45
+docs/PRODUCT.md
+  s_df5e7063453b12::t_219bf2f8d5ba24 1-227
+docs/adr/0001-local-agent-neutral-execution.md
+  s_4b57adba1f5472::t_4f97310e471294 1-12
+docs/adr/0002-separate-results-from-learning.md
+  s_4b57adba1f5472::t_ec8c435276b7a4 1-11
+src/core/run.ts
+  s_6feff1dfeb5a4a::t_c1a772cbf6f59a 12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "81817607b04d9021199f357a33623236c9c94be2",
+  "prompts": {},
+  "sessions": {
+    "s_4b57adba1f5472": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fde7a8089ffeS7UHwBBkbO0t8V",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_6feff1dfeb5a4a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fddb4cb36ffeN8LqjCMsSQMUe8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_ccbf1bdd2d2315": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_032b96951ffecI8Cs5k0PM8sXM",
+        "model": "claude-opus-5"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_df5e7063453b12": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ffe235e9bffedCrB8YZ4zHvoNU",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
