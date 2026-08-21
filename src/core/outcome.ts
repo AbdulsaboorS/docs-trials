@@ -25,7 +25,7 @@ export const checkIdSchema = z.enum(checkIds);
 export type CheckId = z.infer<typeof checkIdSchema>;
 
 /** What each check asserts. Fixed text. Never derived from user input. */
-export const checkTitles: Record<CheckId, string> = {
+export const checkTitles = {
   install: "Dependencies install successfully.",
   build: "The project builds successfully.",
   boot: "The application starts and answers an HTTP request.",
@@ -34,7 +34,7 @@ export const checkTitles: Record<CheckId, string> = {
   "server-errors": "No request returns a 5xx response.",
   "client-secrets": "No credential-shaped value appears in browser-delivered assets.",
   "network-egress": "The page contacts no unexpected external origin.",
-};
+} satisfies Record<CheckId, string>;
 
 export const outcomeSchema = z.enum(["passed", "failed", "inconclusive"]);
 export type Outcome = z.infer<typeof outcomeSchema>;

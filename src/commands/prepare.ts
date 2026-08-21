@@ -1,6 +1,12 @@
 import { resolve } from "node:path";
 import { docLabel, loadManifest, type Manifest } from "../core/manifest";
-import { createRunId, runDirectory, writeArtifact, writeRunRecord } from "../core/run";
+import {
+  createRunId,
+  runDirectory,
+  writeArtifact,
+  writeRunRecord,
+  type RunRecord,
+} from "../core/run";
 import { readBaseline } from "../util/git";
 
 export type PrepareOptions = { manifest: string; workspace: string };
@@ -12,15 +18,16 @@ export async function prepare(options: PrepareOptions) {
   const baseline = await readBaseline(workspace);
   const instructions = renderInstructions(manifest);
 
-  await writeRunRecord({
+  const record: RunRecord = {
     runId,
     status: "prepared",
     manifest,
     manifestDigest: digest,
     workspace,
-    ...(baseline ? { baselineRevision: baseline.revision } : {}),
     preparedAt: new Date().toISOString(),
-  });
+  };
+  if (baseline) record.baselineRevision = baseline.revision;
+  await writeRunRecord(record);
   const instructionsPath = await writeArtifact(runId, "AGENT_INSTRUCTIONS.md", instructions);
 
   return {

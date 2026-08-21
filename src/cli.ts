@@ -25,7 +25,7 @@ Options
 Run identifiers accept a run id, a run directory, or "latest".
 `;
 
-const exitCodes: Record<Outcome, number> = { passed: 0, failed: 1, inconclusive: 2 };
+const exitCodes = { passed: 0, failed: 1, inconclusive: 2 } satisfies Record<Outcome, number>;
 
 async function main(argv: string[]): Promise<number> {
   const args = parse(argv);
@@ -162,14 +162,14 @@ function rel(path: string): string {
 
 main(process.argv.slice(2))
   .then((code) => process.exit(code))
-  .catch((error: unknown) => {
-    if (error instanceof ZodError) {
+  .catch((cause: unknown) => {
+    if (cause instanceof ZodError) {
       process.stderr.write("The manifest is not valid:\n");
-      for (const issue of error.issues) {
+      for (const issue of cause.issues) {
         process.stderr.write(`  ${issue.path.join(".") || "(root)"}: ${issue.message}\n`);
       }
       process.exit(65);
     }
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`${cause instanceof Error ? cause.message : String(cause)}\n`);
     process.exit(70);
   });

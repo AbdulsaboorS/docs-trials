@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { checkIds, deriveOutcome, result, type CheckResult } from "../src/core/outcome";
+import {
+  checkIds,
+  checkResultSchema,
+  deriveOutcome,
+  result,
+  type CheckResult,
+} from "../src/core/outcome";
 
 const all = (outcome: "passed" | "failed" | "inconclusive"): CheckResult[] =>
   checkIds.map((id) => result(id, outcome, "detail"));
@@ -38,8 +44,14 @@ describe("deriveOutcome", () => {
     // The old model keyed results by user text and let one command's exit code
     // stand in for any claim. Results are now keyed by check id, so an
     // arbitrary criterion has nowhere to attach.
-    const invented = { id: "payment-works", outcome: "passed" } as unknown as CheckResult;
-    expect(deriveOutcome([invented])).toBe("inconclusive");
+    const invented = checkResultSchema.safeParse({
+      id: "payment-works",
+      title: "A customer can complete a payment.",
+      outcome: "passed",
+      detail: "Invented result.",
+      evidenceIds: [],
+    });
+    expect(invented.success).toBe(false);
   });
 });
 

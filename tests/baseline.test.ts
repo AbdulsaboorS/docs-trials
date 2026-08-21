@@ -8,7 +8,11 @@ import { deriveOutcome, type CheckId, type CheckResult } from "../src/core/outco
 
 const fixture = resolve(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "sample-app");
 
-function manifest(mode: string, port: number, overrides: Record<string, unknown> = {}): Manifest {
+function manifest(
+  mode: string,
+  port: number,
+  overrides: Partial<Pick<Manifest, "allowedOrigins">> = {},
+): Manifest {
   return manifestSchema.parse({
     version: 1,
     id: "sample",

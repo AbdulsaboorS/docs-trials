@@ -2,6 +2,12 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 
+const docUrlSchema = z.url();
+const labeledUrlDocSchema = z.object({ label: z.string().min(1), url: z.url() }).strict();
+const inlineTextDocSchema = z
+  .object({ label: z.string().min(1), text: z.string().min(1) })
+  .strict();
+
 /**
  * `goals` describe what the author wants the integration to do. Docs Trials
  * shows them in the report and never grades them. Only the baseline checks in
@@ -13,15 +19,7 @@ export const manifestSchema = z
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "Use lowercase letters, digits, and hyphens."),
     title: z.string().min(1),
     task: z.string().min(1),
-    docs: z
-      .array(
-        z.union([
-          z.url(),
-          z.object({ label: z.string().min(1), url: z.url() }).strict(),
-          z.object({ label: z.string().min(1), text: z.string().min(1) }).strict(),
-        ]),
-      )
-      .min(1),
+    docs: z.array(z.union([docUrlSchema, labeledUrlDocSchema, inlineTextDocSchema])).min(1),
     goals: z.array(z.string().min(1)).default([]),
     run: z
       .object({
@@ -79,6 +77,9 @@ export function digestManifest(manifest: Manifest): string {
 }
 
 export function docLabel(doc: ManifestDoc): string {
-  if (typeof doc === "string") return doc;
-  return "url" in doc ? `${doc.label}: ${doc.url}` : `${doc.label} (inline text)`;
+  const url = docUrlSchema.safeParse(doc);
+  if (url.success) return url.data;
+  const labeledUrl = labeledUrlDocSchema.safeParse(doc);
+  if (labeledUrl.success) return `${labeledUrl.data.label}: ${labeledUrl.data.url}`;
+  return `${inlineTextDocSchema.parse(doc).label} (inline text)`;
 }

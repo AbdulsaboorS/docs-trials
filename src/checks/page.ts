@@ -182,6 +182,6 @@ function safeOrigin(value: string): string | undefined {
   }
 }
 
-function message(error: unknown): string {
-  return redact(error instanceof Error ? error.message : String(error));
+function message(cause: unknown): string {
+  return redact(cause instanceof Error ? cause.message : String(cause));
 }

@@ -1,3 +1,5 @@
+import { z, type JSONType } from "zod";
+
 const secretKey =
   "api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|bearer[_-]?token|private[_-]?key|token|secret|password|passwd|cookie";
 
@@ -83,12 +85,17 @@ export function redact(value: string): string {
 
 const secretKeyName = new RegExp(`^(?:${secretKey.replace(/\[_-\]\?/g, "[_-]?")})$`, "i");
 
-export function redactValue(value: unknown): unknown {
-  if (typeof value === "string") return redact(value);
+const stringValueSchema = z.string();
+const objectValueSchema = z.record(z.string(), z.json());
+
+export function redactValue(value: JSONType): JSONType {
+  const stringValue = stringValueSchema.safeParse(value);
+  if (stringValue.success) return redact(stringValue.data);
   if (Array.isArray(value)) return value.map(redactValue);
-  if (value && typeof value === "object") {
+  const objectValue = objectValueSchema.safeParse(value);
+  if (objectValue.success) {
     return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [
+      Object.entries(objectValue.data).map(([key, entry]) => [
         key,
         secretKeyName.test(key.replace(/[_-]/g, "")) || secretKeyName.test(key)
           ? "[REDACTED]"

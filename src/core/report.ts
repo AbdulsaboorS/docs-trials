@@ -2,11 +2,11 @@ import { docLabel } from "./manifest";
 import { checkIds, checkTitles, countByOutcome, type CheckResult, type Outcome } from "./outcome";
 import type { RunRecord } from "./run";
 
-const symbols: Record<Outcome, string> = {
+const symbols = {
   passed: "PASS",
   failed: "FAIL",
   inconclusive: "N/A ",
-};
+} satisfies Record<Outcome, string>;
 
 /** `null` means omit the line. `""` means keep an intentional blank line. */
 type Line = string | null;
