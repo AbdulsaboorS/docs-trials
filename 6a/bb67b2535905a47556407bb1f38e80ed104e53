@@ -1,0 +1,25 @@
+fixtures/process/ordered-cleanup.ts
+  s_2a74f6c3f92c6e::t_c59921d6beaf06 1-18
+src/util/process.ts
+  s_2a74f6c3f92c6e::t_b01b12bf383589 53-57,61-65,67-77,80-90,92-102
+tests/process.test.ts
+  s_2a74f6c3f92c6e::t_547156aee1269c 15,131-160
+tests/verify.test.ts
+  s_2a74f6c3f92c6e::t_b5eac54485d707 1,50,139,153,161-183,228-235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6abb67b2535905a47556407bb1f38e80ed104e53",
+  "prompts": {},
+  "sessions": {
+    "s_2a74f6c3f92c6e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fd58f5dc1ffePIguCn25vKRzzN",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
