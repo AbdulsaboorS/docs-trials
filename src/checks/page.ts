@@ -1,6 +1,6 @@
-import { chromium, type Browser, type Page, type Request, type Response } from "playwright";
+import { chromium, type Browser, type Page, type Request } from "playwright";
 import { redact } from "../core/redact";
-import { findSecrets, type SecretFinding } from "./secrets";
+import { startContentCapture, type ContentScan } from "./content";
 
 const maxMessages = 60;
 const maxMessageChars = 500;
@@ -13,13 +13,6 @@ const requiredResourceTypes = new Set([
   "texttrack",
   "manifest",
 ]);
-
-type ContentScan = {
-  responsesScanned: number;
-  bytesScanned: number;
-  findings: SecretFinding[];
-  gaps: string[];
-};
 
 type VisibleContentKind = "text" | "image" | "svg" | "canvas" | "video" | "iframe" | "form-control";
 
@@ -73,15 +66,6 @@ export async function observePage(
   const pendingResources = new Map<Request, string>();
   const failedResources = new Set<Request>();
   const declaredManifestUrls = new Set<string>();
-  const pendingContentRequests = new Set<Request>();
-  const responses = new Map<Request, Response>();
-  const scans = new Set<Promise<void>>();
-  const contentScan: ContentScan = {
-    responsesScanned: 0,
-    bytesScanned: 0,
-    findings: [],
-    gaps: [],
-  };
   const previewOrigin = new URL(url).origin;
   const deadline = Date.now() + timeoutSeconds * 1_000;
   let collecting = true;
@@ -91,6 +75,7 @@ export async function observePage(
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
     await cdp.send("Runtime.enable");
+    const contentCapture = await startContentCapture(cdp, previewOrigin);
     page.setDefaultTimeout(remaining(deadline));
 
     cdp.on("Runtime.consoleAPICalled", (entry) => {
@@ -113,7 +98,6 @@ export async function observePage(
       if (!collecting) return;
       const origin = safeOrigin(request.url());
       if (origin && origin !== previewOrigin) externalOrigins.add(origin);
-      if (origin === previewOrigin) pendingContentRequests.add(request);
       if (isRequiredResource(request, page, previewOrigin, declaredManifestUrls)) {
         pendingResources.set(request, describeRequest(request));
       }
@@ -130,28 +114,14 @@ export async function observePage(
           push(ungradedObservations, `${status} ${response.url()}`);
         }
       }
-      if (safeOrigin(response.url()) === previewOrigin) responses.set(request, response);
     });
     page.on("requestfinished", (request) => {
       if (!collecting) return;
       pendingResources.delete(request);
-      pendingContentRequests.delete(request);
-      const response = responses.get(request);
-      if (!response) return;
-      responses.delete(request);
-      const scan = scanResponse(response, contentScan).finally(() => scans.delete(scan));
-      scans.add(scan);
     });
     page.on("requestfailed", (request) => {
       if (!collecting) return;
       pendingResources.delete(request);
-      pendingContentRequests.delete(request);
-      const response = responses.get(request);
-      responses.delete(request);
-      if (response) {
-        const scan = scanResponse(response, contentScan).finally(() => scans.delete(scan));
-        scans.add(scan);
-      }
       if (isRequiredResource(request, page, previewOrigin, declaredManifestUrls)) {
         const reason = request.failure()?.errorText ?? "request failed";
         recordResourceFailure(request, `${reason} ${request.url()}`);
@@ -198,16 +168,7 @@ export async function observePage(
     collecting = false;
     const pendingResourceSnapshot = [...pendingResources.values()].sort();
 
-    for (const request of pendingContentRequests) {
-      push(contentScan.gaps, `The same-origin response did not complete: ${request.url()}`);
-    }
-    for (const response of responses.values()) {
-      if (!pendingContentRequests.has(response.request())) {
-        push(contentScan.gaps, `The response body did not complete: ${response.url()}`);
-      }
-    }
-    responses.clear();
-    await Promise.allSettled(scans);
+    const contentScan = await contentCapture.finish();
     const title = navigated ? await page.title().catch(() => "") : "";
     const surface = navigated ? await inspectSurface(page) : undefined;
 
@@ -246,24 +207,6 @@ export async function observePage(
   function push(target: string[], value: string): void {
     if (target.length >= maxMessages) return;
     target.push(redact(value).slice(0, maxMessageChars));
-  }
-}
-
-async function scanResponse(response: Response, scan: ContentScan): Promise<void> {
-  try {
-    const body = await response.body();
-    scan.responsesScanned += 1;
-    scan.bytesScanned += body.byteLength;
-    if (scan.findings.length < 20) {
-      const findings = findSecrets([
-        { url: redact(response.url()), body: body.toString("utf8") },
-      ]).slice(0, 20 - scan.findings.length);
-      scan.findings.push(...findings);
-    }
-  } catch {
-    if (scan.gaps.length < maxMessages) {
-      scan.gaps.push(redact(`Could not read the complete response body: ${response.url()}`));
-    }
   }
 }
 

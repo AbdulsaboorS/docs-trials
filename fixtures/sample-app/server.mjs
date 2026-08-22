@@ -21,6 +21,7 @@ const scripts = {
     "fetch('/optional').finally(() => console.error('net::ERR_FAILED ' + location.origin + '/optional'));",
   "json-secret": "fetch('/config.json').then((response) => response.json()).catch(() => {});",
   "incomplete-body": "fetch('/stream').catch(() => {});",
+  "finding-plus-gap": `const key = '${fakeCredential}'; fetch('/stream').catch(() => {}); console.log(key.length);`,
   "delayed-error": "setTimeout(() => { throw new Error('delayed fixture failure'); }, 2500);",
   "late-secret": "setTimeout(() => fetch('/late-secret').catch(() => {}), 500);",
   "console-resource-words": "console.error('Failed to load resource: application state corrupt');",
@@ -29,7 +30,7 @@ const scripts = {
   "console-cors-words": "console.error('has been blocked by CORS policy');",
   "console-flood":
     "for (let index = 0; index < 70; index += 1) console.error('APPLICATION_ERROR_' + index); setTimeout(() => console.error('LATE_APPLICATION_ERROR'), 300);",
-  "large-secret": `/* ${"x".repeat(4_000_100)} ${fakeCredential} */ console.log('ready');`,
+  "large-secret": `/* ${fakeCredential} ${"x".repeat(1_100_000)} */ console.log('ready');`,
   websocket: `new WebSocket(${JSON.stringify(process.env.WS_URL ?? "")});`,
   "websocket-same-authority": "new WebSocket('ws://' + location.host + '/socket');",
 };
@@ -80,8 +81,8 @@ const body = () => `<!doctype html>
 </html>`;
 
 const server = createServer((request, response) => {
-  if (request.url === "/hang.png" || request.url === "/stream") {
-    if (request.url === "/stream") {
+  if (request.url === "/hang.png" || request.url?.startsWith("/stream")) {
+    if (request.url.startsWith("/stream")) {
       response.writeHead(200, { "content-type": "application/json" });
       response.write('{"partial":');
     }

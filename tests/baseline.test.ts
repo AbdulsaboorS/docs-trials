@@ -50,6 +50,28 @@ function outcomeOf(results: CheckResult[], id: CheckId) {
   return results.find((entry) => entry.id === id)?.outcome;
 }
 
+function browserContent(evidence: Array<{ id: string; content: string }>) {
+  const browser = evidence.find((entry) => entry.id === "browser");
+  if (!browser) throw new Error("Browser evidence was not recorded.");
+  // SAFETY: Browser evidence is emitted by runBaseline and this helper asserts its test contract.
+  return JSON.parse(browser.content).contentScan as {
+    responsesScanned: number;
+    bytesScanned: number;
+    findings: unknown[];
+    gaps: string[];
+    knownGapCount: number;
+    captureFaultCount: number;
+    responses: Array<{
+      url: string;
+      status: number;
+      contentType: string;
+      observedBytes: number;
+      disposition: string;
+      digest?: string;
+    }>;
+  };
+}
+
 async function availablePort(): Promise<number> {
   const server = createTcpServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -107,7 +129,10 @@ function assignedPort(server: { address(): AddressInfo | string | null }): numbe
 
 describe("runBaseline", { timeout: 120_000 }, () => {
   it("passes a clean application", async () => {
-    const { results, omittedChecks } = await runBaseline(await manifest("clean"), fixture);
+    const { results, evidence, omittedChecks } = await runBaseline(
+      await manifest("clean"),
+      fixture,
+    );
     expect(outcomeOf(results, "install")).toBe("passed");
     expect(outcomeOf(results, "boot")).toBe("passed");
     expect(outcomeOf(results, "page-load")).toBe("passed");
@@ -118,6 +143,17 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     expect(outcomeOf(results, "client-secrets")).toBe("passed");
     expect(outcomeOf(results, "network-egress")).toBe("passed");
     expect(outcomeOf(results, "build")).toBeUndefined();
+    expect(browserContent(evidence).responses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: 200,
+          contentType: expect.any(String),
+          observedBytes: expect.any(Number),
+          disposition: "complete",
+          digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        }),
+      ]),
+    );
     expect(omittedChecks).toEqual([
       { id: "build", reason: "The manifest declares no build command." },
     ]);
@@ -229,6 +265,12 @@ describe("runBaseline", { timeout: 120_000 }, () => {
   it("is inconclusive when response headers arrive after the observation cutoff", async () => {
     const { results } = await runBaseline(await manifest("late-secret"), fixture);
     expect(outcomeOf(results, "client-secrets")).toBe("inconclusive");
+  });
+
+  it("keeps a secret failure when another response has a capture gap", async () => {
+    const { results, evidence } = await runBaseline(await manifest("finding-plus-gap"), fixture);
+    expect(outcomeOf(results, "client-secrets")).toBe("failed");
+    expect(browserContent(evidence).knownGapCount).toBeGreaterThan(0);
   });
 
   it("fails a blank structural page and passes a non-text visual surface", async () => {

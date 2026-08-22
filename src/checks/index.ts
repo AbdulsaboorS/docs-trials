@@ -346,11 +346,19 @@ function secretsResult(page: Extract<PageObservation, { available: true }>): Che
       ["browser"],
     );
   }
-  if (contentScan.gaps.length > 0) {
+  if (contentScan.captureFaultCount > 0) {
     return result(
       "client-secrets",
       "inconclusive",
-      `${contentScan.gaps.length} same-origin response body capture gap(s). First: ${contentScan.gaps[0]}`,
+      `Content capture reported ${contentScan.captureFaultCount} fault(s), so the total response gaps are unknown. First: ${contentScan.gaps[0]}`,
+      ["browser"],
+    );
+  }
+  if (contentScan.knownGapCount > 0) {
+    return result(
+      "client-secrets",
+      "inconclusive",
+      `${contentScan.knownGapCount} same-origin response body capture gap(s). First: ${contentScan.gaps[0]}`,
       ["browser"],
     );
   }
