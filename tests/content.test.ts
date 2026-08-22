@@ -479,7 +479,7 @@ describe("bounded content capture", () => {
     );
   });
 
-  it("continues a paused response without waiting for stream setup to settle", async () => {
+  it("keeps a response paused until stream setup settles", async () => {
     const session = new FakeCdpSession();
     session.streamDelayMs = 50;
     session.streamBodies.set("slow-stream", Buffer.from("complete body").toString("base64"));
@@ -487,8 +487,25 @@ describe("bounded content capture", () => {
     request(session, "slow-stream", "/slow-stream");
     await new Promise((resolveTurn) => setImmediate(resolveTurn));
 
-    expect(session.calls).toContain("Fetch.continueRequest");
+    expect(session.calls).not.toContain("Fetch.continueRequest");
     finishRequest(session, "slow-stream");
+
+    const scan = await capture.finish();
+    expect(scan.responses[0]?.disposition).toBe("complete");
+    expect(scan.captureFaultCount).toBe(0);
+    expect(session.calls).toContain("Fetch.continueRequest");
+  });
+
+  it("continues a paused response without cancelling slow stream setup", async () => {
+    const session = new FakeCdpSession();
+    session.streamDelayMs = 300;
+    session.streamBodies.set("bounded-pause", Buffer.from("complete body").toString("base64"));
+    const capture = await startContentCapture(session, origin, { operationTimeoutMs: 1_000 });
+    request(session, "bounded-pause", "/bounded-pause");
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 275));
+
+    expect(session.calls).toContain("Fetch.continueRequest");
+    finishRequest(session, "bounded-pause");
 
     const scan = await capture.finish();
     expect(scan.responses[0]?.disposition).toBe("complete");
@@ -513,7 +530,7 @@ describe("bounded content capture", () => {
     ).toHaveLength(2);
   });
 
-  it("waits for response metadata before retrying a failed paused stream", async () => {
+  it("retries a failed paused stream when response metadata arrives", async () => {
     const session = new FakeCdpSession();
     session.streamFailuresRemaining = 1;
     session.streamBodies.set("ordered-late", Buffer.from("complete body").toString("base64"));
@@ -543,11 +560,15 @@ describe("bounded content capture", () => {
         headers: { "content-type": "text/plain" },
       },
     });
+    await new Promise((resolveTurn) => setImmediate(resolveTurn));
     finishRequest(session, "ordered-late");
 
     const scan = await capture.finish();
     expect(scan.responses[0]?.disposition).toBe("complete");
     expect(scan.captureFaultCount).toBe(0);
+    expect(
+      session.calls.filter((method) => method === "Network.streamResourceContent"),
+    ).toHaveLength(2);
   });
 
   it("does not treat partial observed bytes as complete after streaming fails", async () => {

@@ -15,6 +15,7 @@ const maxContentTypeChars = 200;
 const maxGapExamples = 3;
 const maxGapChars = 500;
 const defaultOperationTimeoutMs = 15_000;
+const pausedContinuationDelayMs = 250;
 
 type ContentDisposition = "complete" | "truncated" | "skipped" | "unavailable" | "pending";
 
@@ -45,6 +46,7 @@ type ResponseState = {
   retainedBytes: number;
   streaming: boolean;
   readyToStream: boolean;
+  pausedRequestId: string;
   initialized: boolean;
   finished: boolean;
   unavailable: boolean;
@@ -164,7 +166,9 @@ export async function startContentCapture(
     activeStates.set(entry.requestId, state);
     recordResponse(state, entry.response);
     if (state.readyToStream && !state.streaming && !state.initialized) {
-      startStreaming(entry.requestId, state);
+      startStreaming(entry.requestId, state, operationTimeoutMs, () =>
+        continuePausedResponse(state),
+      );
     }
   });
 
@@ -195,11 +199,13 @@ export async function startContentCapture(
     const state = activeStates.get(networkId) ?? createState(entry.request.url);
     if (state) {
       activeStates.set(networkId, state);
-      startStreaming(networkId, state);
-      continueResponse(entry.requestId, state, () => {
-        state.readyToStream = true;
-        if (state.streamFailed && state.recorded) startStreaming(networkId, state);
-      });
+      state.readyToStream = true;
+      state.pausedRequestId = entry.requestId;
+      startStreaming(networkId, state, operationTimeoutMs, () => continuePausedResponse(state));
+      setTimeout(
+        () => continuePausedResponse(state),
+        Math.min(operationTimeoutMs, pausedContinuationDelayMs),
+      ).unref();
     } else {
       continueResponse(entry.requestId);
     }
@@ -379,6 +385,7 @@ export async function startContentCapture(
       retainedBytes: 0,
       streaming: false,
       readyToStream: false,
+      pausedRequestId: "",
       initialized: false,
       finished: false,
       unavailable: false,
@@ -418,6 +425,7 @@ export async function startContentCapture(
     state.streamFailed = false;
     state.streamAttempts += 1;
     if (!reserveOperation(state)) return;
+    let settleAfterAttempt = true;
     trackOperation(
       session.send("Network.streamResourceContent", { requestId }).then((value) => {
         const result = streamResultSchema.parse(value);
@@ -452,14 +460,23 @@ export async function startContentCapture(
         state.streamFailed = true;
         state.streamFailureDetail = errorDetail(error);
         if (state.readyToStream && state.recorded && !state.finished && state.streamAttempts < 2) {
-          startStreaming(requestId, state);
+          settleAfterAttempt = false;
+          startStreaming(requestId, state, timeoutMs, settled);
         } else if (state.finished || state.streamAttempts >= 2) {
           failStreaming(state);
         }
       },
       timeoutMs,
-      settled,
+      () => {
+        if (settleAfterAttempt) settled?.();
+      },
     );
+  }
+
+  function continuePausedResponse(state: ResponseState): void {
+    const requestId = state.pausedRequestId;
+    state.pausedRequestId = "";
+    if (requestId) continueResponse(requestId, state);
   }
 
   function continueResponse(
