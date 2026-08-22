@@ -1,0 +1,19 @@
+tests/manifest.test.ts
+  s_9e638af24980c1::t_73b171ee57fe9e 20,54-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4c10ba48f56366e8a93175300f71ff61c4c65f7e",
+  "prompts": {},
+  "sessions": {
+    "s_9e638af24980c1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fd8ede24dffe4xEh4HaBWdIaEw",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
