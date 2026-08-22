@@ -43,6 +43,23 @@ export const checkTitles = {
 export const outcomeSchema = z.enum(["passed", "failed", "inconclusive"]);
 export type Outcome = z.infer<typeof outcomeSchema>;
 
+export const ungradedObservationSchema = z
+  .object({
+    detail: z.string().min(1),
+    evidenceIds: z.array(z.string().min(1)).min(1),
+  })
+  .strict()
+  .superRefine((observation, context) => {
+    if (new Set(observation.evidenceIds).size !== observation.evidenceIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidenceIds"],
+        message: "Evidence references must be unique.",
+      });
+    }
+  });
+export type UngradedObservation = z.infer<typeof ungradedObservationSchema>;
+
 export const checkResultSchema = z
   .object({
     id: checkIdSchema,

@@ -14,6 +14,7 @@ import {
   writeEvidence,
   writeRunRecord,
   type RunLocation,
+  type RunRecord,
 } from "../src/core/run";
 
 let home: string;
@@ -42,7 +43,11 @@ beforeEach(async () => {
   runBaselineMock.mockReset();
   runBaselineMock.mockResolvedValue(cleanBaseline());
   readDiffMock.mockReset();
-  readDiffMock.mockResolvedValue("No source change.");
+  readDiffMock.mockResolvedValue({
+    content: "No source change.\n",
+    complete: true,
+    detail: "All source changes were represented.",
+  });
 });
 
 afterEach(async () => {
@@ -50,7 +55,7 @@ afterEach(async () => {
   await rm(home, { recursive: true, force: true });
 });
 
-async function preparedRun(): Promise<RunLocation> {
+async function preparedRun(baselineRevision?: string): Promise<RunLocation> {
   const preparedAt = new Date();
   const location = await reserveRunDirectory("sample", preparedAt);
   const manifest = manifestSchema.parse({
@@ -61,7 +66,7 @@ async function preparedRun(): Promise<RunLocation> {
     docs: ["https://example.com/docs"],
     run: { install: "true", build: "true", start: "true" },
   });
-  await writeRunRecord(location, {
+  const prepared: RunRecord = {
     runId: location.runId,
     status: "prepared",
     manifest,
@@ -79,7 +84,9 @@ async function preparedRun(): Promise<RunLocation> {
         error: "Test fixture did not retrieve documentation.",
       },
     ],
-  });
+  };
+  if (baselineRevision) prepared.baselineRevision = baselineRevision;
+  await writeRunRecord(location, prepared);
   return location;
 }
 
@@ -114,6 +121,39 @@ describe("verify", () => {
     });
     expect(result.markdown).toContain("Verifier: Docs Trials verify-cli (schema 1)");
     expect(result.markdown).toContain("Prepared with: Docs Trials 0.1.0 (schema 1)");
+  });
+
+  it("records source diff as linked ungraded evidence", async () => {
+    const location = await preparedRun("a".repeat(40));
+
+    const verified = await verify({ run: location.runId, quiet: true }, dependencies);
+    const stored = await readRunRecord(location.runId);
+
+    expect(verified.markdown).toContain("[source-diff](evidence/source-diff.txt)");
+    expect(stored).toMatchObject({
+      status: "verified",
+      verification: {
+        ungradedObservations: [
+          {
+            detail: "Source changes against the prepared baseline were recorded.",
+            evidenceIds: ["source-diff"],
+          },
+        ],
+      },
+    });
+  });
+
+  it("reports an incomplete source diff without implying complete capture", async () => {
+    const location = await preparedRun("b".repeat(40));
+    readDiffMock.mockResolvedValueOnce({
+      content: "partial diff\n",
+      complete: false,
+      detail: "tracked diff was truncated",
+    });
+
+    const verified = await verify({ run: location.runId, quiet: true }, dependencies);
+
+    expect(verified.markdown).toContain("recorded incompletely: tracked diff was truncated");
   });
 
   it("allows only one concurrent verifier to execute the baseline", async () => {

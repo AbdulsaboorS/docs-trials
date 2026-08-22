@@ -7,12 +7,15 @@ import { delay, terminateProcessTree, trackChild } from "../util/process";
 const maxOutputBytes = 1_000_000;
 
 export type CommandOutcome = {
+  command: string;
   ran: boolean;
   exitCode: number | null;
   signalCode: NodeJS.Signals | null;
   timedOut: boolean;
   truncated: boolean;
   cleanupSucceeded: boolean;
+  allowedEnvironment: { present: string[]; missing: string[] };
+  capturedOutput: string;
   output: string;
   durationMs: number;
 };
@@ -108,15 +111,42 @@ export async function runCommand(
   ].filter(Boolean);
 
   return {
+    command,
     ran: !finished.error,
     exitCode: finished.exitCode,
     signalCode: finished.signalCode,
     timedOut: finished.timedOut,
     truncated,
     cleanupSucceeded,
+    allowedEnvironment: {
+      present: environment.present,
+      missing: environment.missing,
+    },
+    capturedOutput: redact(Buffer.concat(chunks).toString("utf8")),
     durationMs: Date.now() - startedAt,
     output: redact(
       `$ ${command}\n${Buffer.concat(chunks).toString("utf8")}${notes.length ? `\n${notes.join("\n")}` : ""}`,
     ),
   };
+}
+
+export function commandEvidence(command: CommandOutcome): string {
+  return redact(
+    JSON.stringify(
+      {
+        command: command.command,
+        ran: command.ran,
+        exitCode: command.exitCode,
+        signal: command.signalCode,
+        timedOut: command.timedOut,
+        outputTruncated: command.truncated,
+        durationMs: command.durationMs,
+        cleanupSucceeded: command.cleanupSucceeded,
+        allowedEnvironment: command.allowedEnvironment,
+        capturedOutput: command.capturedOutput,
+      },
+      null,
+      2,
+    ),
+  );
 }

@@ -241,7 +241,10 @@ describe("runBaseline", { timeout: 120_000 }, () => {
       '"ungradedObservations": [',
     );
     expect(evidence.find((entry) => entry.id === "browser")?.content).toContain("404");
-    expect(ungradedObservations[0]).toContain("404");
+    expect(ungradedObservations[0]).toEqual({
+      detail: expect.stringContaining("404"),
+      evidenceIds: ["browser"],
+    });
   });
 
   it("is inconclusive while a required same-origin asset remains pending", async () => {
@@ -562,5 +565,28 @@ describe("runBaseline", { timeout: 120_000 }, () => {
   it("records evidence for every stage it reached", async () => {
     const { evidence } = await runBaseline(await manifest("clean"), fixture);
     expect(evidence.map((item) => item.id)).toEqual(["install", "boot", "browser"]);
+  });
+
+  it("retains boot probe, ownership recheck, and cleanup facts", async () => {
+    const { evidence } = await runBaseline(await manifest("clean"), fixture);
+    // SAFETY: runBaseline emits boot evidence as the JSON preview snapshot tested here.
+    const boot = JSON.parse(evidence.find((item) => item.id === "boot")?.content ?? "{}") as {
+      probe?: { attempts?: number; lastReachable?: boolean; lastStatus?: number };
+      listenerOwnership?: Array<{ phase: string; status: string }>;
+      cleanupStatus?: string;
+    };
+
+    expect(boot.probe).toMatchObject({
+      attempts: expect.any(Number),
+      lastReachable: true,
+      lastStatus: 200,
+    });
+    expect(boot.listenerOwnership).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ phase: "initial", status: "owned" }),
+        expect.objectContaining({ phase: "recheck", status: "stable" }),
+      ]),
+    );
+    expect(boot.cleanupStatus).toBe("succeeded");
   });
 });

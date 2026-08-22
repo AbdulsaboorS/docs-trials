@@ -45,6 +45,7 @@ type RawRunRecord = {
       evidenceIds?: string[] | undefined;
     }>;
     omittedChecks?: Array<{ id: string; reason: string }>;
+    ungradedObservations?: Array<{ detail: string; evidenceIds: string[] }>;
   };
 };
 
@@ -406,6 +407,28 @@ describe("run records", () => {
       },
     });
     await expect(readRunRecord(missingEvidence.runId)).rejects.toThrow(/missing evidence install/i);
+  });
+
+  it("rejects an ungraded observation with missing evidence", async () => {
+    const base = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const missingEvidence = await writeRaw({
+      ...base,
+      runId: "sample-ungraded-missing-evidence",
+      status: "verified",
+      verification: {
+        verifier: currentRunMetadata(),
+        startedAt: "2026-08-20T12:01:00.000Z",
+        completedAt: "2026-08-20T12:02:00.000Z",
+        outcome: "inconclusive",
+        results: [result("install", "passed", "ok", ["install"])],
+        omittedChecks: [{ id: "build", reason: "No build command." }],
+        ungradedObservations: [{ detail: "Observed something.", evidenceIds: ["browser"] }],
+      },
+    });
+    await mkdir(join(missingEvidence.directory, "evidence"));
+    await writeFile(join(missingEvidence.directory, "evidence", "install.txt"), "observed\n");
+
+    await expect(readRunRecord(missingEvidence.runId)).rejects.toThrow(/missing evidence browser/i);
   });
 
   it("rejects omissions that do not match the manifest lifecycle", async () => {

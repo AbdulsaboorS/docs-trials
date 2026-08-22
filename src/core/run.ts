@@ -27,6 +27,7 @@ import {
   checkResultSchema,
   deriveOutcome,
   outcomeSchema,
+  ungradedObservationSchema,
   type CheckId,
 } from "./outcome";
 import { redact } from "./redact";
@@ -100,7 +101,7 @@ const verificationSchema = z
     omittedChecks: z
       .array(z.object({ id: checkIdSchema, reason: z.string().min(1) }).strict())
       .default([]),
-    ungradedObservations: z.array(z.string().min(1)).optional(),
+    ungradedObservations: z.array(ungradedObservationSchema).optional(),
   })
   .strict()
   .superRefine((verification, context) => {
@@ -570,7 +571,10 @@ async function validateEvidenceReferences(
   location: RunLocation,
   record: Extract<RunRecord, { status: "verified" }>,
 ): Promise<void> {
-  const references = new Set(record.verification.results.flatMap((entry) => entry.evidenceIds));
+  const references = new Set([
+    ...record.verification.results.flatMap((entry) => entry.evidenceIds),
+    ...(record.verification.ungradedObservations ?? []).flatMap((entry) => entry.evidenceIds),
+  ]);
   for (const id of references) {
     const safeId = evidenceIdSchema.parse(id);
     const path = join(location.directory, "evidence", `${safeId}.txt`);

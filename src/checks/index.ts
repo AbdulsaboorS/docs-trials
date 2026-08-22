@@ -1,6 +1,6 @@
 import type { Manifest } from "../core/manifest";
-import { result, type CheckId, type CheckResult } from "../core/outcome";
-import { runCommand, succeeded, type CommandOutcome } from "./command";
+import { result, type CheckId, type CheckResult, type UngradedObservation } from "../core/outcome";
+import { commandEvidence, runCommand, succeeded, type CommandOutcome } from "./command";
 import { observePage, type PageObservation } from "./page";
 import { startPreview } from "./preview";
 
@@ -9,7 +9,7 @@ export type BaselineEvidence = { id: string; content: string };
 export type BaselineRun = {
   results: CheckResult[];
   evidence: BaselineEvidence[];
-  ungradedObservations: string[];
+  ungradedObservations: UngradedObservation[];
   omittedChecks: Array<{ id: CheckId; reason: string }>;
 };
 
@@ -30,7 +30,7 @@ export async function runBaseline(
 ): Promise<BaselineRun> {
   const results: CheckResult[] = [];
   const evidence: BaselineEvidence[] = [];
-  const ungradedObservations: string[] = [];
+  const ungradedObservations: UngradedObservation[] = [];
   const omittedChecks: BaselineRun["omittedChecks"] = [];
   const { run } = manifest;
 
@@ -41,7 +41,7 @@ export async function runBaseline(
     run.commandTimeoutSeconds,
     manifest.allowedEnvironment,
   );
-  evidence.push({ id: "install", content: install.output });
+  evidence.push({ id: "install", content: commandEvidence(install) });
   results.push(commandResult("install", install, "Dependency installation"));
 
   let build: CommandOutcome | undefined;
@@ -61,7 +61,7 @@ export async function runBaseline(
       run.commandTimeoutSeconds,
       manifest.allowedEnvironment,
     );
-    evidence.push({ id: "build", content: build.output });
+    evidence.push({ id: "build", content: commandEvidence(build) });
     results.push(commandResult("build", build, "Build"));
   }
 
@@ -82,7 +82,8 @@ export async function runBaseline(
     run.startupTimeoutSeconds,
     manifest.allowedEnvironment,
   );
-  evidence.push({ id: "boot", content: preview.output });
+  const bootEvidence = { id: "boot", content: "" };
+  evidence.push(bootEvidence);
 
   try {
     if (!preview.available) {
@@ -136,14 +137,17 @@ export async function runBaseline(
     return { results, evidence, ungradedObservations, omittedChecks };
   } finally {
     const cleanupSucceeded = await preview.stop();
+    bootEvidence.content = preview.evidence();
     if (!cleanupSucceeded) {
       evidence.push({
         id: "cleanup",
         content: "The preview process group remained after SIGTERM and SIGKILL cleanup attempts.",
       });
-      ungradedObservations.push(
-        "The preview process group could not be fully terminated after browser observation.",
-      );
+      ungradedObservations.push({
+        detail:
+          "The preview process group could not be fully terminated after browser observation.",
+        evidenceIds: ["cleanup"],
+      });
       const bootIndex = results.findIndex((entry) => entry.id === "boot");
       const boot = results[bootIndex];
       if (boot) {

@@ -195,12 +195,15 @@ describe("renderReport", () => {
       ...base,
       verification: {
         ...base.verification,
-        ungradedObservations: ["404 http://127.0.0.1/optional"],
+        ungradedObservations: [
+          { detail: "404 http://127.0.0.1/optional", evidenceIds: ["browser"] },
+        ],
       },
     };
     const markdown = renderReport(withUngraded);
     expect(markdown).toContain("## Ungraded observations");
     expect(markdown).toContain("404 http://127.0.0.1/optional");
+    expect(markdown).toContain("[browser](evidence/browser.txt)");
     expect(markdown).toContain("did not change a baseline check result");
   });
 

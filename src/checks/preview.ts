@@ -18,6 +18,7 @@ export type Preview =
       output: string;
       confirmOwnership: () => Promise<boolean>;
       stop: () => Promise<boolean>;
+      evidence: () => string;
     }
   | {
       available: false;
@@ -25,7 +26,30 @@ export type Preview =
       detail: string;
       output: string;
       stop: () => Promise<boolean>;
+      evidence: () => string;
     };
+
+type OwnershipFact = {
+  phase: "initial" | "recheck";
+  status: "owned" | "foreign" | "unknown" | "stable" | "changed";
+  owners?: number[];
+};
+
+type PreviewFacts = {
+  command: string;
+  url: string;
+  ran: boolean;
+  probe: {
+    preflightPortOccupied: boolean;
+    attempts: number;
+    lastReachable: boolean;
+    lastStatus: number;
+  };
+  listenerOwnership: OwnershipFact[];
+  outputTruncated: boolean;
+  cleanupStatus: "not-required" | "succeeded" | "failed";
+  allowedEnvironment: { present: string[]; missing: string[] };
+};
 
 /**
  * Starts the application and waits until it answers an HTTP request.
@@ -41,21 +65,61 @@ export async function startPreview(
   timeoutSeconds: number,
   allowedEnvironment: readonly string[] = [],
 ): Promise<Preview> {
+  const environment = commandEnvironment(allowedEnvironment, {
+    FORCE_COLOR: "0",
+    NO_COLOR: "1",
+  });
+  const facts: PreviewFacts = {
+    command,
+    url,
+    ran: false,
+    probe: {
+      preflightPortOccupied: false,
+      attempts: 0,
+      lastReachable: false,
+      lastStatus: 0,
+    },
+    listenerOwnership: [],
+    outputTruncated: false,
+    cleanupStatus: "not-required",
+    allowedEnvironment: {
+      present: environment.present,
+      missing: environment.missing,
+    },
+  };
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  const capturedOutput = () => Buffer.concat(chunks).toString("utf8");
+  const evidence = () =>
+    redact(
+      JSON.stringify(
+        {
+          ...facts,
+          capturedOutput: capturedOutput(),
+        },
+        null,
+        2,
+      ),
+    );
   const noop = async () => true;
   const occupied = await portInUse(url);
+  facts.probe.preflightPortOccupied = occupied;
   if (occupied) {
     const port = new URL(url).port || "80";
     const detail =
       `Port ${port} already accepted a TCP connection before the start command ran, so Docs Trials cannot tell which process owns it. ` +
       `Stop the process holding port ${port} (\`lsof -nP -iTCP:${port} -sTCP:LISTEN\`), or point \`run.url\` and \`run.start\` at a free port.`;
-    return { available: false, reason: "infrastructure", detail, output: detail, stop: noop };
+    return {
+      available: false,
+      reason: "infrastructure",
+      detail,
+      output: detail,
+      stop: noop,
+      evidence,
+    };
   }
 
   let child: ChildProcess;
-  const environment = commandEnvironment(allowedEnvironment, {
-    FORCE_COLOR: "0",
-    NO_COLOR: "1",
-  });
   try {
     child = spawn(command, {
       cwd: resolve(workspace),
@@ -64,20 +128,30 @@ export async function startPreview(
       stdio: ["ignore", "pipe", "pipe"],
       env: environment.values,
     });
+    facts.ran = true;
   } catch (error) {
     const detail = `The start command could not launch: ${error instanceof Error ? error.message : String(error)}`;
-    return { available: false, reason: "infrastructure", detail, output: detail, stop: noop };
+    return {
+      available: false,
+      reason: "infrastructure",
+      detail,
+      output: detail,
+      stop: noop,
+      evidence,
+    };
   }
   trackChild(child);
 
-  const chunks: Buffer[] = [];
-  let bytes = 0;
   const append = (chunk: Buffer) => {
     const remaining = maxOutputBytes - bytes;
-    if (remaining <= 0) return;
+    if (remaining <= 0) {
+      facts.outputTruncated = true;
+      return;
+    }
     const bounded = chunk.subarray(0, remaining);
     chunks.push(bounded);
     bytes += bounded.byteLength;
+    if (bounded.byteLength < chunk.byteLength) facts.outputTruncated = true;
   };
   child.stdout?.on("data", append);
   child.stderr?.on("data", append);
@@ -86,9 +160,13 @@ export async function startPreview(
       `$ ${command}\n${Buffer.concat(chunks).toString("utf8")}\n${describeCommandEnvironment(environment)}`,
     );
   let ownershipTimer: NodeJS.Timeout | undefined;
+  let ownershipCheck: Promise<void> | undefined;
   const stop = async () => {
     if (ownershipTimer) clearInterval(ownershipTimer);
-    return terminateProcessTree(child);
+    await ownershipCheck;
+    const succeeded = await terminateProcessTree(child);
+    facts.cleanupStatus = succeeded ? "succeeded" : "failed";
+    return succeeded;
   };
 
   let launchError: Error | undefined;
@@ -105,6 +183,7 @@ export async function startPreview(
         detail: `The start command could not launch: ${launchError.message}`,
         output: output(),
         stop,
+        evidence,
       };
     }
     if (child.exitCode !== null || child.signalCode !== null) {
@@ -119,26 +198,51 @@ export async function startPreview(
             : `The start command exited with code ${child.exitCode} before ${url} answered.`,
         output: output(),
         stop,
+        evidence,
       };
     }
     const attempt = await probe(url);
+    facts.probe.attempts += 1;
+    facts.probe.lastReachable = attempt.reachable;
+    facts.probe.lastStatus = attempt.status;
     if (attempt.reachable) {
       const ownership = await listenerOwnership(url, child.pid);
+      const initialOwnership: OwnershipFact = {
+        phase: "initial",
+        status: ownership.status,
+      };
+      if (ownership.owners) {
+        initialOwnership.owners = [...ownership.owners].sort((a, b) => a - b);
+      }
+      facts.listenerOwnership.push(initialOwnership);
       if (ownership.status !== "owned" || !ownership.owners) {
         const detail =
           ownership.status === "foreign"
             ? `${url} answered, but its listener does not belong to the start command's process group.`
             : `${url} answered, but Docs Trials could not establish which process owns its listener.`;
-        return { available: false, reason: "infrastructure", detail, output: output(), stop };
+        return {
+          available: false,
+          reason: "infrastructure",
+          detail,
+          output: output(),
+          stop,
+          evidence,
+        };
       }
       const expectedOwners = ownership.owners;
       let ownershipStable = true;
-      let ownershipCheck: Promise<void> | undefined;
       const checkOwnership = async () => {
         if (ownershipCheck) return ownershipCheck;
         ownershipCheck = (async () => {
           const owners = await listenerOwners(new URL(url));
-          if (!owners || !sameNumbers(owners, expectedOwners)) ownershipStable = false;
+          const stable = owners !== undefined && sameNumbers(owners, expectedOwners);
+          const recheck: OwnershipFact = {
+            phase: "recheck",
+            status: owners ? (stable ? "stable" : "changed") : "unknown",
+          };
+          if (owners) recheck.owners = [...owners].sort((a, b) => a - b);
+          facts.listenerOwnership.push(recheck);
+          if (!stable) ownershipStable = false;
         })().finally(() => {
           ownershipCheck = undefined;
         });
@@ -156,6 +260,7 @@ export async function startPreview(
           return ownershipStable;
         },
         stop,
+        evidence,
       };
     }
     await delay(250);
@@ -167,6 +272,7 @@ export async function startPreview(
     detail: `${url} did not answer within ${timeoutSeconds} seconds.`,
     output: output(),
     stop,
+    evidence,
   };
 }
 

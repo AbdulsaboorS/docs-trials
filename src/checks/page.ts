@@ -1,4 +1,5 @@
 import { chromium, type Browser, type Page, type Request } from "playwright";
+import type { UngradedObservation } from "../core/outcome";
 import { redact } from "../core/redact";
 import { startContentCapture, type ContentScan } from "./content";
 
@@ -32,7 +33,7 @@ export type PageObservation =
       pendingResources: string[];
       serverErrors: string[];
       externalOrigins: string[];
-      ungradedObservations: string[];
+      ungradedObservations: UngradedObservation[];
       contentScan: ContentScan;
       visibleContent: VisibleContent | undefined;
       visibleContentDetail: string | undefined;
@@ -61,7 +62,7 @@ export async function observePage(
   const pageErrors: string[] = [];
   const resourceFailures: string[] = [];
   const serverErrors: string[] = [];
-  const ungradedObservations: string[] = [];
+  const ungradedObservations: UngradedObservation[] = [];
   const externalOrigins = new Set<string>();
   const pendingResources = new Map<Request, string>();
   const failedResources = new Set<Request>();
@@ -111,7 +112,7 @@ export async function observePage(
         if (isRequiredResource(request, page, previewOrigin, declaredManifestUrls)) {
           recordResourceFailure(request, `${status} ${response.url()}`);
         } else if (isUngradedFailure(request, page, previewOrigin, declaredManifestUrls)) {
-          push(ungradedObservations, `${status} ${response.url()}`);
+          pushUngraded(`${status} ${response.url()}`);
         }
       }
     });
@@ -127,7 +128,7 @@ export async function observePage(
         recordResourceFailure(request, `${reason} ${request.url()}`);
       } else if (isUngradedFailure(request, page, previewOrigin, declaredManifestUrls)) {
         const reason = request.failure()?.errorText ?? "request failed";
-        push(ungradedObservations, `${reason} ${request.url()}`);
+        pushUngraded(`${reason} ${request.url()}`);
       }
     });
 
@@ -150,10 +151,8 @@ export async function observePage(
 
     if (navigated) {
       const manifests = await page
-        .evaluate(() =>
-          Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="manifest"]')).map(
-            (link) => link.href,
-          ),
+        .evaluate<string[]>(
+          "Array.from(document.querySelectorAll('link[rel~=\"manifest\"]'), function (link) { return link.href; })",
         )
         .catch(() => []);
       const sameOriginManifests = manifests.filter(
@@ -161,7 +160,8 @@ export async function observePage(
       );
       for (const manifest of sameOriginManifests) declaredManifestUrls.add(manifest);
       await page.evaluate((urls) => {
-        for (const manifest of urls) void fetch(manifest).catch(() => undefined);
+        const ignored = { rejection() {} };
+        for (const manifest of urls) void fetch(manifest).catch(ignored.rejection);
       }, sameOriginManifests);
       await page.waitForTimeout(Math.min(observationWindowSeconds * 1_000, remaining(deadline)));
     }
@@ -207,6 +207,14 @@ export async function observePage(
   function push(target: string[], value: string): void {
     if (target.length >= maxMessages) return;
     target.push(redact(value).slice(0, maxMessageChars));
+  }
+
+  function pushUngraded(detail: string): void {
+    if (ungradedObservations.length >= maxMessages) return;
+    ungradedObservations.push({
+      detail: redact(detail).slice(0, maxMessageChars),
+      evidenceIds: ["browser"],
+    });
   }
 }
 
@@ -270,110 +278,118 @@ async function inspectSurface(page: Page): Promise<{
       bodyTextSample: string;
       uncertain: boolean;
     }>(async () => {
-      const bodyTextSample = () => document.body?.innerText.slice(0, 2_000) ?? "";
       let uncertain = false;
-      const hasVisibleStyle = (element: Element) => {
-        for (let current: Element | null = element; current; current = current.parentElement) {
-          const style = getComputedStyle(current);
-          if (
-            style.display === "none" ||
-            style.visibility === "hidden" ||
-            style.visibility === "collapse" ||
-            Number(style.opacity) === 0 ||
-            /opacity\((?:0|0%)\)/.test(style.filter)
-          ) {
-            return false;
+      const helpers = {
+        bodyTextSample() {
+          return document.body?.innerText.slice(0, 2_000) ?? "";
+        },
+        hasVisibleStyle(element: Element) {
+          for (let current: Element | null = element; current; current = current.parentElement) {
+            const style = getComputedStyle(current);
+            if (
+              style.display === "none" ||
+              style.visibility === "hidden" ||
+              style.visibility === "collapse" ||
+              Number(style.opacity) === 0 ||
+              /opacity\((?:0|0%)\)/.test(style.filter)
+            ) {
+              return false;
+            }
+            if (style.clipPath !== "none") {
+              if (/^inset\(\s*(?:100%|[1-9]\d{2,}%)/.test(style.clipPath)) return false;
+              uncertain = true;
+              return false;
+            }
+            if (style.maskImage !== "none") {
+              uncertain = true;
+              return false;
+            }
           }
-          if (style.clipPath !== "none") {
-            if (/^inset\(\s*(?:100%|[1-9]\d{2,}%)/.test(style.clipPath)) return false;
-            uncertain = true;
-            return false;
+          return true;
+        },
+        intersectsVisibleRegion(rectangle: DOMRect, element: Element) {
+          let left = Math.max(0, rectangle.left);
+          let top = Math.max(0, rectangle.top);
+          let right = Math.min(window.innerWidth, rectangle.right);
+          let bottom = Math.min(window.innerHeight, rectangle.bottom);
+          for (let current: Element | null = element; current; current = current.parentElement) {
+            const style = getComputedStyle(current);
+            const currentRectangle = current.getBoundingClientRect();
+            if (["auto", "clip", "hidden", "scroll"].includes(style.overflowX)) {
+              left = Math.max(left, currentRectangle.left + current.clientLeft);
+              right = Math.min(
+                right,
+                currentRectangle.left + current.clientLeft + current.clientWidth,
+              );
+            }
+            if (["auto", "clip", "hidden", "scroll"].includes(style.overflowY)) {
+              top = Math.max(top, currentRectangle.top + current.clientTop);
+              bottom = Math.min(
+                bottom,
+                currentRectangle.top + current.clientTop + current.clientHeight,
+              );
+            }
           }
-          if (style.maskImage !== "none") {
-            uncertain = true;
-            return false;
+          return right > left && bottom > top;
+        },
+        pixelsHaveAlpha(pixels: Uint8ClampedArray) {
+          for (let index = 3; index < pixels.length; index += 4) {
+            if (pixels[index]! > 0) return true;
           }
-        }
-        return true;
-      };
-      const intersectsVisibleRegion = (rectangle: DOMRect, element: Element) => {
-        let left = Math.max(0, rectangle.left);
-        let top = Math.max(0, rectangle.top);
-        let right = Math.min(window.innerWidth, rectangle.right);
-        let bottom = Math.min(window.innerHeight, rectangle.bottom);
-        for (let current: Element | null = element; current; current = current.parentElement) {
-          const style = getComputedStyle(current);
-          const currentRectangle = current.getBoundingClientRect();
-          if (["auto", "clip", "hidden", "scroll"].includes(style.overflowX)) {
-            left = Math.max(left, currentRectangle.left + current.clientLeft);
-            right = Math.min(
-              right,
-              currentRectangle.left + current.clientLeft + current.clientWidth,
-            );
+          return false;
+        },
+        rasterHasPaint(
+          source: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement,
+          sourceWidth: number,
+          sourceHeight: number,
+        ): boolean | undefined {
+          const width = Math.max(1, Math.min(512, sourceWidth));
+          const height = Math.max(1, Math.min(512, sourceHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d", { willReadFrequently: true });
+          if (!context) return undefined;
+          try {
+            context.drawImage(source, 0, 0, width, height);
+            return helpers.pixelsHaveAlpha(context.getImageData(0, 0, width, height).data);
+          } catch {
+            return undefined;
           }
-          if (["auto", "clip", "hidden", "scroll"].includes(style.overflowY)) {
-            top = Math.max(top, currentRectangle.top + current.clientTop);
-            bottom = Math.min(
-              bottom,
-              currentRectangle.top + current.clientTop + current.clientHeight,
-            );
+        },
+        async svgHasPaint(element: SVGSVGElement): Promise<boolean | undefined> {
+          const rectangle = element.getBoundingClientRect();
+          const width = Math.max(1, Math.min(512, Math.round(rectangle.width)));
+          const height = Math.max(1, Math.min(512, Math.round(rectangle.height)));
+          const clone = element.cloneNode(true);
+          if (!(clone instanceof SVGSVGElement)) return undefined;
+          const sources = [element, ...Array.from(element.querySelectorAll("*"))];
+          const targets = [clone, ...Array.from(clone.querySelectorAll("*"))];
+          for (const [index, source] of sources.entries()) {
+            const target = targets[index];
+            if (!(target instanceof SVGElement)) continue;
+            const computed = getComputedStyle(source);
+            for (let propertyIndex = 0; propertyIndex < computed.length; propertyIndex += 1) {
+              const property = computed.item(propertyIndex);
+              target.style.setProperty(
+                property,
+                computed.getPropertyValue(property),
+                computed.getPropertyPriority(property),
+              );
+            }
           }
-        }
-        return right > left && bottom > top;
-      };
-      const pixelsHaveAlpha = (pixels: Uint8ClampedArray) =>
-        pixels.some((value, index) => index % 4 === 3 && value > 0);
-      const rasterHasPaint = (
-        source: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement,
-        sourceWidth: number,
-        sourceHeight: number,
-      ): boolean | undefined => {
-        const width = Math.max(1, Math.min(512, sourceWidth));
-        const height = Math.max(1, Math.min(512, sourceHeight));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        if (!context) return undefined;
-        try {
-          context.drawImage(source, 0, 0, width, height);
-          return pixelsHaveAlpha(context.getImageData(0, 0, width, height).data);
-        } catch {
-          return undefined;
-        }
-      };
-      const svgHasPaint = async (element: SVGSVGElement): Promise<boolean | undefined> => {
-        const rectangle = element.getBoundingClientRect();
-        const width = Math.max(1, Math.min(512, Math.round(rectangle.width)));
-        const height = Math.max(1, Math.min(512, Math.round(rectangle.height)));
-        const clone = element.cloneNode(true);
-        if (!(clone instanceof SVGSVGElement)) return undefined;
-        const sources = [element, ...Array.from(element.querySelectorAll("*"))];
-        const targets = [clone, ...Array.from(clone.querySelectorAll("*"))];
-        for (const [index, source] of sources.entries()) {
-          const target = targets[index];
-          if (!(target instanceof SVGElement)) continue;
-          const computed = getComputedStyle(source);
-          for (let propertyIndex = 0; propertyIndex < computed.length; propertyIndex += 1) {
-            const property = computed.item(propertyIndex);
-            target.style.setProperty(
-              property,
-              computed.getPropertyValue(property),
-              computed.getPropertyPriority(property),
-            );
+          clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+          clone.setAttribute("width", String(width));
+          clone.setAttribute("height", String(height));
+          const image = new Image();
+          image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(clone))}`;
+          try {
+            await image.decode();
+            return helpers.rasterHasPaint(image, width, height);
+          } catch {
+            return undefined;
           }
-        }
-        clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-        clone.setAttribute("width", String(width));
-        clone.setAttribute("height", String(height));
-        const image = new Image();
-        image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(clone))}`;
-        try {
-          await image.decode();
-          return rasterHasPaint(image, width, height);
-        } catch {
-          return undefined;
-        }
+        },
       };
 
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -383,7 +399,7 @@ async function inspectSurface(page: Page): Promise<{
         if (!node.textContent?.trim() || !element) continue;
         const color = getComputedStyle(element).color;
         if (
-          !hasVisibleStyle(element) ||
+          !helpers.hasVisibleStyle(element) ||
           color === "transparent" ||
           /rgba\([^)]*,\s*0\)/.test(color)
         ) {
@@ -395,9 +411,9 @@ async function inspectSurface(page: Page): Promise<{
         if (
           rectangle.width > 0 &&
           rectangle.height > 0 &&
-          intersectsVisibleRegion(rectangle, element)
+          helpers.intersectsVisibleRegion(rectangle, element)
         ) {
-          return { kind: "text", bodyTextSample: bodyTextSample(), uncertain: false };
+          return { kind: "text", bodyTextSample: helpers.bodyTextSample(), uncertain: false };
         }
       }
 
@@ -408,10 +424,10 @@ async function inspectSurface(page: Page): Promise<{
       )) {
         const rectangle = element.getBoundingClientRect();
         if (
-          !hasVisibleStyle(element) ||
+          !helpers.hasVisibleStyle(element) ||
           rectangle.width <= 0 ||
           rectangle.height <= 0 ||
-          !intersectsVisibleRegion(rectangle, element)
+          !helpers.intersectsVisibleRegion(rectangle, element)
         ) {
           continue;
         }
@@ -419,7 +435,11 @@ async function inspectSurface(page: Page): Promise<{
         let kind: VisibleContentKind;
         if (element instanceof HTMLImageElement) {
           if (!element.complete || element.naturalWidth === 0) continue;
-          const painted = rasterHasPaint(element, element.naturalWidth, element.naturalHeight);
+          const painted = helpers.rasterHasPaint(
+            element,
+            element.naturalWidth,
+            element.naturalHeight,
+          );
           if (painted === undefined) {
             uncertain = true;
             continue;
@@ -427,7 +447,7 @@ async function inspectSurface(page: Page): Promise<{
           if (!painted) continue;
           kind = "image";
         } else if (element instanceof SVGSVGElement) {
-          const painted = await svgHasPaint(element);
+          const painted = await helpers.svgHasPaint(element);
           if (painted === undefined) {
             uncertain = true;
             continue;
@@ -435,7 +455,7 @@ async function inspectSurface(page: Page): Promise<{
           if (!painted) continue;
           kind = "svg";
         } else if (element instanceof HTMLCanvasElement) {
-          const painted = rasterHasPaint(element, element.width, element.height);
+          const painted = helpers.rasterHasPaint(element, element.width, element.height);
           if (painted === undefined) {
             uncertain = true;
             continue;
@@ -447,7 +467,7 @@ async function inspectSurface(page: Page): Promise<{
             if (element.currentSrc) uncertain = true;
             continue;
           }
-          const painted = rasterHasPaint(element, element.videoWidth, element.videoHeight);
+          const painted = helpers.rasterHasPaint(element, element.videoWidth, element.videoHeight);
           if (painted === undefined) {
             uncertain = true;
             continue;
@@ -484,17 +504,18 @@ async function inspectSurface(page: Page): Promise<{
             style.borderLeftColor,
             style.outlineColor,
           ];
-          if (
-            style.backgroundImage === "none" &&
-            paints.every((color) => color === "transparent" || /rgba\([^)]*,\s*0\)/.test(color))
-          ) {
+          let painted = style.backgroundImage !== "none";
+          for (const color of paints) {
+            if (color !== "transparent" && !/rgba\([^)]*,\s*0\)/.test(color)) painted = true;
+          }
+          if (!painted) {
             continue;
           }
           kind = "form-control";
         }
-        return { kind, bodyTextSample: bodyTextSample(), uncertain: false };
+        return { kind, bodyTextSample: helpers.bodyTextSample(), uncertain: false };
       }
-      return { kind: undefined, bodyTextSample: bodyTextSample(), uncertain };
+      return { kind: undefined, bodyTextSample: helpers.bodyTextSample(), uncertain };
     })
     .then(({ kind, bodyTextSample, uncertain }) => ({
       visibleContent: kind ? { kind } : uncertain ? undefined : null,

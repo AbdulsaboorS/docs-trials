@@ -1,4 +1,11 @@
-import { checkIds, checkTitles, countByOutcome, type CheckResult, type Outcome } from "./outcome";
+import {
+  checkIds,
+  checkTitles,
+  countByOutcome,
+  type CheckResult,
+  type Outcome,
+  type UngradedObservation,
+} from "./outcome";
 import type { RunRecord } from "./run";
 
 const symbols = {
@@ -118,12 +125,14 @@ function omittedSection(omitted: Array<{ id: CheckResult["id"]; reason: string }
   ];
 }
 
-function ungradedSection(observations: string[]): string[] {
+function ungradedSection(observations: UngradedObservation[]): string[] {
   if (observations.length === 0) return [];
   return [
     "## Ungraded observations",
     "",
-    ...observations.map((observation) => `- ${observation}`),
+    ...observations.map(
+      (observation) => `- ${observation.detail} Evidence: ${evidenceLinks(observation)}`,
+    ),
     "",
     "These facts did not change a baseline check result.",
     "",
@@ -184,7 +193,7 @@ function escapeCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\n+/g, " ");
 }
 
-function evidenceLinks(entry: CheckResult): string {
+function evidenceLinks(entry: Pick<CheckResult, "evidenceIds">): string {
   return entry.evidenceIds.length === 0
     ? "None recorded."
     : entry.evidenceIds.map((id) => `[${id}](evidence/${id}.txt)`).join(", ");

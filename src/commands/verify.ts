@@ -1,6 +1,7 @@
 import { runBaseline } from "../checks";
 import { checkIds, deriveOutcome } from "../core/outcome";
 import { renderReport } from "../core/report";
+import { redact } from "../core/redact";
 import {
   currentRunMetadata,
   withVerificationLock,
@@ -42,6 +43,9 @@ export async function verify(
       throw new Error("Baseline produced duplicate evidence identifiers.");
     }
     const emittedEvidence = new Set(evidenceIds);
+    if (record.baselineRevision && emittedEvidence.has("source-diff")) {
+      throw new Error("Baseline evidence identifier source-diff is reserved by verification.");
+    }
     for (const check of baseline.results) {
       for (const evidenceId of check.evidenceIds) {
         if (!emittedEvidence.has(evidenceId)) {
@@ -51,16 +55,33 @@ export async function verify(
         }
       }
     }
+    for (const observation of baseline.ungradedObservations) {
+      for (const evidenceId of observation.evidenceIds) {
+        if (!emittedEvidence.has(evidenceId)) {
+          throw new Error(
+            `Ungraded observation references evidence ${evidenceId} that this verification did not emit.`,
+          );
+        }
+      }
+    }
     for (const item of baseline.evidence) {
       await writeEvidence(location, item.id, item.content, session);
     }
+    const ungradedObservations = baseline.ungradedObservations.map((observation) => ({
+      ...observation,
+      detail: redact(observation.detail),
+    }));
     if (record.baselineRevision) {
-      await writeEvidence(
-        location,
-        "source-diff",
-        await dependencies.readDiff(record.workspace, record.baselineRevision),
-        session,
-      );
+      const sourceDiff = await dependencies.readDiff(record.workspace, record.baselineRevision);
+      await writeEvidence(location, "source-diff", sourceDiff.content, session);
+      ungradedObservations.push({
+        detail: redact(
+          sourceDiff.complete
+            ? "Source changes against the prepared baseline were recorded."
+            : `Source changes against the prepared baseline were recorded incompletely: ${sourceDiff.detail}`,
+        ),
+        evidenceIds: ["source-diff"],
+      });
     }
 
     const omittedIds = new Set(baseline.omittedChecks.map((entry) => entry.id));
@@ -76,7 +97,7 @@ export async function verify(
         outcome,
         results: baseline.results,
         omittedChecks: baseline.omittedChecks,
-        ungradedObservations: baseline.ungradedObservations,
+        ungradedObservations,
       },
     });
     if (verifiedRecord.status !== "verified") {
@@ -95,6 +116,7 @@ export async function verify(
           outcome: verified.verification.outcome,
           results: verified.verification.results,
           omittedChecks: verified.verification.omittedChecks,
+          ungradedObservations: verified.verification.ungradedObservations,
         },
         null,
         2,

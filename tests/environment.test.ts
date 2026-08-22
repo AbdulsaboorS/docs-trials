@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runCommand } from "../src/checks/command";
+import { commandEvidence, runCommand } from "../src/checks/command";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -31,6 +31,33 @@ describe("lifecycle command environment", () => {
     expect(outcome.exitCode).toBe(0);
     expect(outcome.output).toContain("DOCS_TRIALS_APPROVED_VALUE");
     expect(outcome.output).not.toContain("approved-child-value");
+  });
+
+  it("retains complete command evidence without environment values", async () => {
+    vi.stubEnv("DOCS_TRIALS_PRESENT", "do-not-record-this-value");
+    const outcome = await runCommand(
+      "node -e \"process.stdout.write('captured')\"",
+      process.cwd(),
+      10,
+      ["DOCS_TRIALS_PRESENT", "DOCS_TRIALS_MISSING"],
+    );
+
+    expect(JSON.parse(commandEvidence(outcome))).toMatchObject({
+      command: expect.any(String),
+      ran: true,
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      outputTruncated: false,
+      durationMs: expect.any(Number),
+      cleanupSucceeded: true,
+      allowedEnvironment: {
+        present: ["DOCS_TRIALS_PRESENT"],
+        missing: ["DOCS_TRIALS_MISSING"],
+      },
+      capturedOutput: "captured",
+    });
+    expect(commandEvidence(outcome)).not.toContain("do-not-record-this-value");
   });
 
   it.skipIf(process.platform === "win32")(
