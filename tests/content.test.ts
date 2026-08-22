@@ -11,6 +11,7 @@ class FakeCdpSession {
   failStream = false;
   streamFailuresRemaining = 0;
   hangStream = false;
+  streamDelayMs = 0;
   failContinue = false;
   hangContinue = false;
   detached = false;
@@ -45,6 +46,9 @@ class FakeCdpSession {
       }
       if (this.failStream) throw new Error("stream failed");
       if (this.hangStream) return new Promise(() => undefined);
+      if (this.streamDelayMs > 0) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, this.streamDelayMs));
+      }
       return { bufferedData: this.streamBodies.get(String(params?.requestId)) ?? "" };
     }
     if (method === "Fetch.continueRequest") {
@@ -475,6 +479,22 @@ describe("bounded content capture", () => {
     );
   });
 
+  it("continues a paused response without waiting for stream setup to settle", async () => {
+    const session = new FakeCdpSession();
+    session.streamDelayMs = 50;
+    session.streamBodies.set("slow-stream", Buffer.from("complete body").toString("base64"));
+    const capture = await startContentCapture(session, origin);
+    request(session, "slow-stream", "/slow-stream");
+    await new Promise((resolveTurn) => setImmediate(resolveTurn));
+
+    expect(session.calls).toContain("Fetch.continueRequest");
+    finishRequest(session, "slow-stream");
+
+    const scan = await capture.finish();
+    expect(scan.responses[0]?.disposition).toBe("complete");
+    expect(scan.captureFaultCount).toBe(0);
+  });
+
   it("retries after continuation when paused streaming fails once", async () => {
     const session = new FakeCdpSession();
     session.streamFailuresRemaining = 1;
@@ -491,6 +511,43 @@ describe("bounded content capture", () => {
     expect(
       session.calls.filter((method) => method === "Network.streamResourceContent"),
     ).toHaveLength(2);
+  });
+
+  it("waits for response metadata before retrying a failed paused stream", async () => {
+    const session = new FakeCdpSession();
+    session.streamFailuresRemaining = 1;
+    session.streamBodies.set("ordered-late", Buffer.from("complete body").toString("base64"));
+    const capture = await startContentCapture(session, origin);
+    const url = `${origin}/ordered-late`;
+    session.emit("Network.requestWillBeSent", {
+      requestId: "ordered-late",
+      request: { url },
+    });
+    session.emit("Fetch.requestPaused", {
+      requestId: "fetch-ordered-late",
+      networkId: "ordered-late",
+      request: { url },
+      responseStatusCode: 200,
+    });
+    await new Promise((resolveTurn) => setImmediate(resolveTurn));
+    expect(
+      session.calls.filter((method) => method === "Network.streamResourceContent"),
+    ).toHaveLength(1);
+
+    session.emit("Network.responseReceived", {
+      requestId: "ordered-late",
+      response: {
+        url,
+        status: 200,
+        mimeType: "text/plain",
+        headers: { "content-type": "text/plain" },
+      },
+    });
+    finishRequest(session, "ordered-late");
+
+    const scan = await capture.finish();
+    expect(scan.responses[0]?.disposition).toBe("complete");
+    expect(scan.captureFaultCount).toBe(0);
   });
 
   it("does not treat partial observed bytes as complete after streaming fails", async () => {

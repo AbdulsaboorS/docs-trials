@@ -15,7 +15,6 @@ const maxContentTypeChars = 200;
 const maxGapExamples = 3;
 const maxGapChars = 500;
 const defaultOperationTimeoutMs = 15_000;
-const pausedStreamSetupTimeoutMs = 250;
 
 type ContentDisposition = "complete" | "truncated" | "skipped" | "unavailable" | "pending";
 
@@ -196,17 +195,11 @@ export async function startContentCapture(
     const state = activeStates.get(networkId) ?? createState(entry.request.url);
     if (state) {
       activeStates.set(networkId, state);
-      startStreaming(
-        networkId,
-        state,
-        Math.min(operationTimeoutMs, pausedStreamSetupTimeoutMs),
-        () => {
-          continueResponse(entry.requestId, state, () => {
-            state.readyToStream = true;
-            if (state.streamFailed) startStreaming(networkId, state);
-          });
-        },
-      );
+      startStreaming(networkId, state);
+      continueResponse(entry.requestId, state, () => {
+        state.readyToStream = true;
+        if (state.streamFailed && state.recorded) startStreaming(networkId, state);
+      });
     } else {
       continueResponse(entry.requestId);
     }
@@ -458,7 +451,7 @@ export async function startContentCapture(
         state.streaming = false;
         state.streamFailed = true;
         state.streamFailureDetail = errorDetail(error);
-        if (state.readyToStream && !state.finished && state.streamAttempts < 2) {
+        if (state.readyToStream && state.recorded && !state.finished && state.streamAttempts < 2) {
           startStreaming(requestId, state);
         } else if (state.finished || state.streamAttempts >= 2) {
           failStreaming(state);
@@ -546,7 +539,7 @@ export async function startContentCapture(
     state.initialized = true;
     state.unavailable = true;
     recordFault(
-      `Could not start bounded response streaming${state.streamFailureDetail ? `: ${state.streamFailureDetail}` : "."}`,
+      `Could not start bounded response streaming for ${state.response.url}${state.streamFailureDetail ? `: ${state.streamFailureDetail}` : "."}`,
     );
   }
 
