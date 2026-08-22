@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +7,7 @@ import { digestDocumentation, maximumDocumentationBytes } from "../src/core/docu
 import { digestManifest, manifestSchema } from "../src/core/manifest";
 import { result } from "../src/core/outcome";
 import {
+  recoverRunLocks,
   latestRunId,
   readRunRecord,
   reserveRunDirectory,
@@ -513,8 +514,196 @@ describe("verification locks", () => {
     await writeFile(join(location.directory, ".verify.lock"), "stale\n");
 
     await expect(withVerificationLock(expected.runId, async () => {})).rejects.toThrow(
-      /remove .*\.verify\.lock/i,
+      /docs-trials recover/i,
     );
+  });
+
+  it("does not acquire verification ownership during recovery", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const recoveryPath = join(location.directory, ".recover.lock");
+    await writeFile(recoveryPath, "recovery in progress\n");
+
+    await expect(withVerificationLock(expected.runId, async () => {})).rejects.toThrow(
+      /being recovered/i,
+    );
+    await expect(readFile(join(location.directory, ".verify.lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await rm(recoveryPath);
+  });
+
+  it("releases verification ownership while a recovery lock is present", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const recoveryPath = join(location.directory, ".recover.lock");
+    const recoveryContents = "recovery in progress\n";
+    let releaseRecovery: Promise<void> | undefined;
+    let recoveryReleased = false;
+
+    await withVerificationLock(expected.runId, async () => {
+      await writeFile(recoveryPath, recoveryContents);
+      releaseRecovery = new Promise((resolveRelease) => {
+        setTimeout(
+          () =>
+            void rm(recoveryPath).then(() => {
+              recoveryReleased = true;
+              resolveRelease();
+            }),
+          50,
+        );
+      });
+    });
+
+    expect(recoveryReleased).toBe(true);
+    await releaseRecovery;
+    await expect(readFile(join(location.directory, ".verify.lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(readFile(recoveryPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(withVerificationLock(expected.runId, async () => "entered")).resolves.toBe(
+      "entered",
+    );
+  });
+
+  it("recovers a dead legacy verifier and its write leases", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    await writeFile(
+      join(location.directory, ".verify.lock"),
+      `${JSON.stringify({
+        pid: 999_999,
+        createdAt: "2026-08-20T12:01:00.000Z",
+        token: "00000000-0000-4000-8000-000000000001",
+      })}\n`,
+    );
+    await writeFile(join(location.directory, ".commit.lock"), "");
+    await writeFile(join(location.directory, ".write-legacy"), "");
+
+    const recovered = await recoverRunLocks(expected.runId, () => "absent");
+
+    expect(recovered.removed).toEqual([".commit.lock", ".write-legacy", ".verify.lock"]);
+    await expect(readFile(join(location.directory, ".verify.lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(readFile(join(location.directory, ".commit.lock"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("reclaims a recovery lock left by a dead process", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const recoveryPath = join(location.directory, ".recover.lock");
+    await writeFile(
+      recoveryPath,
+      `${JSON.stringify({
+        version: 1,
+        kind: "recover",
+        pid: 999_999,
+        hostname: hostname(),
+        createdAt: "2026-08-20T12:01:00.000Z",
+        token: "00000000-0000-4000-8000-000000000003",
+        verificationToken: "00000000-0000-4000-8000-000000000003",
+      })}\n`,
+    );
+
+    await expect(recoverRunLocks(expected.runId, () => "absent")).resolves.toEqual({
+      runId: expected.runId,
+      removed: [],
+    });
+    await expect(readFile(recoveryPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("force-reclaims a malformed recovery lock", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const recoveryPath = join(location.directory, ".recover.lock");
+    await writeFile(recoveryPath, "stale\n");
+
+    await expect(recoverRunLocks(expected.runId, () => "alive", true)).resolves.toEqual({
+      runId: expected.runId,
+      removed: [],
+    });
+    await expect(readFile(recoveryPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("refuses recovery while the recorded verifier may be alive", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const lockPath = join(location.directory, ".verify.lock");
+    await writeFile(
+      lockPath,
+      `${JSON.stringify({
+        pid: process.pid,
+        createdAt: "2026-08-20T12:01:00.000Z",
+        token: "00000000-0000-4000-8000-000000000002",
+      })}\n`,
+    );
+
+    await expect(recoverRunLocks(expected.runId, () => "alive")).rejects.toThrow(
+      /still running.*no lock was removed/i,
+    );
+    await expect(readFile(lockPath, "utf8")).resolves.toContain(String(process.pid));
+  });
+
+  it("refuses malformed recovery state without removing it", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const lockPath = join(location.directory, ".verify.lock");
+    await writeFile(lockPath, "stale\n");
+
+    await expect(recoverRunLocks(expected.runId, () => "absent")).rejects.toThrow(
+      /malformed.*no lock was removed/i,
+    );
+    await expect(readFile(lockPath, "utf8")).resolves.toBe("stale\n");
+  });
+
+  it("force-recovers an unverifiable verification lock", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const lockPath = join(location.directory, ".verify.lock");
+    await writeFile(lockPath, "stale\n");
+
+    await expect(recoverRunLocks(expected.runId, () => "alive", true)).resolves.toEqual({
+      runId: expected.runId,
+      removed: [".verify.lock"],
+    });
+    await expect(readFile(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not force-recover a valid lock whose owner may be alive", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const { location } = await store(expected);
+    const lockPath = join(location.directory, ".verify.lock");
+    await writeFile(
+      lockPath,
+      `${JSON.stringify({
+        pid: process.pid,
+        createdAt: "2026-08-20T12:01:00.000Z",
+        token: "00000000-0000-4000-8000-000000000004",
+      })}\n`,
+    );
+
+    await expect(recoverRunLocks(expected.runId, () => "alive", true)).rejects.toThrow(
+      /still running.*no lock was removed/i,
+    );
+    await expect(readFile(lockPath, "utf8")).resolves.toContain(String(process.pid));
+  });
+
+  it("does not remove a verification lock replaced during the operation", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    await store(expected);
+    let lockPath = "";
+
+    await withVerificationLock(expected.runId, async (location) => {
+      lockPath = join(location.directory, ".verify.lock");
+      await rm(lockPath);
+      await writeFile(lockPath, "replacement\n");
+    });
+
+    await expect(readFile(lockPath, "utf8")).resolves.toBe("replacement\n");
+    await rm(lockPath);
   });
 
   it("allows only one concurrent verification record commit", async () => {

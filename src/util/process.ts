@@ -50,28 +50,54 @@ export async function terminateProcessTree(child: ChildProcess): Promise<boolean
   return !groupExists();
 }
 
-const tracked = new Set<ChildProcess>();
+type InterruptSignal = "SIGHUP" | "SIGINT" | "SIGTERM";
+type CleanupPhase = "children" | "state" | "owner";
+
+const cleanupOrder: CleanupPhase[] = ["children", "state", "owner"];
+const interruptCleanups = new Map<() => Promise<void>, CleanupPhase>();
 let handlersInstalled = false;
 let interruptCleanup: Promise<void> | undefined;
 
-function handleInterrupt(): void {
-  if (interruptCleanup) return;
-  interruptCleanup = Promise.allSettled([...tracked].map(terminateProcessTree)).then(() => {
-    process.exit(130);
-  });
+export function interruptWasRequested(): boolean {
+  return interruptCleanup !== undefined;
 }
 
-/**
- * Tracks a child so an interrupt cannot leave a preview server holding the
- * port. A detached child is in its own process group, so Ctrl-C reaches this
- * process only.
- */
-export function trackChild(child: ChildProcess): void {
-  tracked.add(child);
-  child.once("close", () => tracked.delete(child));
-  if (handlersInstalled) return;
-  handlersInstalled = true;
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-    process.on(signal, handleInterrupt);
+function handleInterrupt(signal: InterruptSignal): void {
+  if (interruptCleanup) return;
+  interruptCleanup = (async () => {
+    for (const phase of cleanupOrder) {
+      for (;;) {
+        const cleanups = [...interruptCleanups].filter((entry) => entry[1] === phase);
+        if (cleanups.length === 0) break;
+        for (const [cleanup] of cleanups) interruptCleanups.delete(cleanup);
+        await Promise.allSettled(cleanups.map(([cleanup]) => cleanup()));
+      }
+    }
+    process.exit({ SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }[signal]);
+  })();
+}
+
+/** Registers state that must be released before an interrupt exits the CLI. */
+export function trackInterruptCleanup(
+  cleanup: () => Promise<void>,
+  phase: CleanupPhase = "state",
+): () => void {
+  interruptCleanups.set(cleanup, phase);
+  if (!handlersInstalled) {
+    handlersInstalled = true;
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+      process.on(signal, () => handleInterrupt(signal));
+    }
   }
+  return () => {
+    interruptCleanups.delete(cleanup);
+  };
+}
+
+/** Tracks a detached child so an interrupt cannot leave its process group alive. */
+export function trackChild(child: ChildProcess): void {
+  const untrack = trackInterruptCleanup(async () => {
+    await terminateProcessTree(child);
+  }, "children");
+  child.once("close", untrack);
 }

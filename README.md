@@ -52,6 +52,15 @@ docs-trials verify latest        # run the checks, write AX.md
 `verify` exits `0` when every check passed, `1` when a check failed, and `2`
 when the result is inconclusive. That makes it usable in CI.
 
+If the verifier process stops and leaves a run locked, use
+`docs-trials recover <run>`. Recovery removes lock files only when their
+valid recorded local process is no longer running. It refuses malformed or
+unattributable metadata in bounded regular lock files unless you pass `--force`.
+Force can remove that invalid metadata, but it never bypasses a valid owner that
+may still be running. Invalid lock paths, such as symlinks, directories, or
+oversized files, require manual inspection. Because ownership uses process IDs,
+PID reuse can also require manual inspection before recovery is possible.
+
 ### trial.json
 
 ```json
@@ -101,6 +110,9 @@ application. They test that the integration installs, builds, boots, renders,
 loads browser assets, and does not leak detected credentials in
 same-origin responses. Fetch and XHR failures are not graded as browser asset
 failures. The browser observes the page for the period frozen in the manifest.
+The client-secrets check is inconclusive when a textual response cannot be
+decoded reliably or when a WebSocket is observed because its messages are not
+captured.
 When no build command is declared, the build check is listed as omitted and
 receives no outcome.
 

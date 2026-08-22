@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,6 +47,7 @@ beforeEach(async () => {
     content: "No source change.\n",
     complete: true,
     detail: "All source changes were represented.",
+    ignoredPathsExcluded: false,
   });
 });
 
@@ -135,7 +136,7 @@ describe("verify", () => {
       verification: {
         ungradedObservations: [
           {
-            detail: "Source changes against the prepared baseline were recorded.",
+            detail: "Git-visible source changes against the prepared baseline were recorded.",
             evidenceIds: ["source-diff"],
           },
         ],
@@ -149,11 +150,35 @@ describe("verify", () => {
       content: "partial diff\n",
       complete: false,
       detail: "tracked diff was truncated",
+      ignoredPathsExcluded: false,
     });
 
     const verified = await verify({ run: location.runId, quiet: true }, dependencies);
 
     expect(verified.markdown).toContain("recorded incompletely: tracked diff was truncated");
+  });
+
+  it("rejects evidence that is not linked to a result or ungraded observation", async () => {
+    const location = await preparedRun();
+    const baseline = cleanBaseline();
+    baseline.evidence.push({ id: "orphan", content: "unlinked evidence" });
+    runBaselineMock.mockResolvedValueOnce(baseline);
+
+    await expect(verify({ run: location.runId, quiet: true }, dependencies)).rejects.toThrow(
+      /evidence orphan was emitted but not linked/i,
+    );
+  });
+
+  it("removes evidence left by an interrupted verification before retrying", async () => {
+    const location = await preparedRun();
+    const evidenceDirectory = join(location.directory, "evidence");
+    await mkdir(evidenceDirectory);
+    const stalePath = join(evidenceDirectory, "stale.txt");
+    await writeFile(stalePath, "partial prior attempt\n");
+
+    await verify({ run: location.runId, quiet: true }, dependencies);
+
+    await expect(readFile(stalePath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("allows only one concurrent verifier to execute the baseline", async () => {
@@ -198,6 +223,14 @@ describe("verify", () => {
       /cannot be overwritten/i,
     );
     expect(runBaselineMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a verified attempt with an unreferenced evidence file", async () => {
+    const location = await preparedRun();
+    await verify({ run: location.runId, quiet: true }, dependencies);
+    await writeFile(join(location.directory, "evidence", "orphan.txt"), "unreferenced\n");
+
+    await expect(readRunRecord(location.runId)).rejects.toThrow(/unreferenced evidence/i);
   });
 
   it("keeps the canonical record prepared when evidence writing fails", async () => {

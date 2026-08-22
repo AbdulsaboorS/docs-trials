@@ -4,6 +4,7 @@ import { relative } from "node:path";
 import { ZodError } from "zod";
 import { init } from "./commands/init";
 import { prepare } from "./commands/prepare";
+import { recover } from "./commands/recover";
 import { verify } from "./commands/verify";
 import { countByOutcome, type Outcome } from "./core/outcome";
 import { latestRunId, loadRun } from "./core/run";
@@ -14,12 +15,14 @@ Usage
   docs-trials init [path]              Write a starter trial.json
   docs-trials prepare [options]        Freeze the task and print agent instructions
   docs-trials verify [run]             Run the baseline checks and write AX.md
+  docs-trials recover [run] [--force]  Remove locks left by a stopped verifier
   docs-trials show [run]               Print the report for a run
 
 Options
   -m, --manifest <path>   Manifest path (default: trial.json)
   -w, --workspace <path>  Workspace the agent works in (default: .)
   -q, --quiet             Suppress progress output
+  -f, --force             Remove invalid metadata from bounded lock files
   -h, --help              Show this message
 
 Run identifiers accept a run id, a run directory, or "latest".
@@ -104,6 +107,16 @@ async function main(argv: string[]): Promise<number> {
       return exitCodes[record.verification.outcome];
     }
 
+    case "recover": {
+      const recovered = await recover(args.positional[0] ?? "latest", Boolean(args.flags.force));
+      process.stdout.write(
+        recovered.removed.length === 0
+          ? `Run ${recovered.runId} has no lock files.\n`
+          : `Recovered run ${recovered.runId}: ${recovered.removed.join(", ")}\n`,
+      );
+      return 0;
+    }
+
     case "runs": {
       const latest = await latestRunId();
       process.stdout.write(latest ? `${latest}\n` : "No runs yet.\n");
@@ -120,7 +133,7 @@ type Parsed = {
   command: string | undefined;
   positional: string[];
   options: { manifest?: string; workspace?: string };
-  flags: { help?: boolean; quiet?: boolean };
+  flags: { force?: boolean; help?: boolean; quiet?: boolean };
 };
 
 function parse(argv: string[]): Parsed {
@@ -135,6 +148,7 @@ function parse(argv: string[]): Parsed {
     if (token === undefined || token === "--") continue;
     if (token === "-h" || token === "--help") parsed.flags.help = true;
     else if (token === "-q" || token === "--quiet") parsed.flags.quiet = true;
+    else if (token === "-f" || token === "--force") parsed.flags.force = true;
     else if (token === "-m" || token === "--manifest") assign("manifest", rest.shift());
     else if (token === "-w" || token === "--workspace") assign("workspace", rest.shift());
     else if (token.startsWith("--manifest=")) parsed.options.manifest = token.slice(11);

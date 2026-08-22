@@ -12,6 +12,7 @@ const fixtureDirectory = resolve(
 );
 const repeatedInterruptFixture = resolve(fixtureDirectory, "repeated-interrupt.ts");
 const chromiumInterruptFixture = resolve(fixtureDirectory, "chromium-interrupt.ts");
+const orderedCleanupFixture = resolve(fixtureDirectory, "ordered-cleanup.ts");
 const execFileAsync = promisify(execFile);
 
 function processExists(pid: number): boolean {
@@ -127,6 +128,36 @@ async function waitForProcessesToExit(pids: number[]): Promise<void> {
 }
 
 describe.skipIf(process.platform === "win32")("interrupt cleanup", () => {
+  it("releases children and subordinate state before owner locks", async () => {
+    const parent = spawn(process.execPath, ["--import", "tsx", orderedCleanupFixture], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    parent.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    parent.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+
+    try {
+      await waitForLine(parent, "READY", () => stderr);
+      const exited = waitForExit(parent, () => stderr);
+      process.kill(parent.pid!, "SIGINT");
+      expect((await exited).code).toBe(130);
+      expect(stdout.trim().split("\n")).toEqual([
+        "READY",
+        "CHILDREN",
+        "CHILDREN-LATE",
+        "STATE",
+        "OWNER",
+      ]);
+    } finally {
+      if (parent.pid && processExists(parent.pid)) process.kill(parent.pid, "SIGKILL");
+    }
+  });
+
   it("kills a detached SIGTERM-ignoring child after two quick SIGINTs", async () => {
     const parent = spawn(process.execPath, ["--import", "tsx", repeatedInterruptFixture], {
       stdio: ["ignore", "pipe", "pipe"],

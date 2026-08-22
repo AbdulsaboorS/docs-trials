@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { redact } from "../core/redact";
 import { commandEnvironment, describeCommandEnvironment } from "../util/environment";
-import { delay, terminateProcessTree, trackChild } from "../util/process";
+import { delay, interruptWasRequested, terminateProcessTree, trackChild } from "../util/process";
 
 const maxOutputBytes = 1_000_000;
 
@@ -36,6 +36,7 @@ export async function runCommand(
   timeoutSeconds: number,
   allowedEnvironment: readonly string[] = [],
 ): Promise<CommandOutcome> {
+  if (interruptWasRequested()) throw new Error("Docs Trials was interrupted.");
   const startedAt = Date.now();
   const environment = commandEnvironment(allowedEnvironment, {
     CI: "1",

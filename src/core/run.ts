@@ -1,10 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, type Dirent } from "node:fs";
 import {
   lstat,
   link,
   mkdir,
-  open,
   readFile,
   readdir,
   realpath,
@@ -12,7 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { arch, homedir, platform, release } from "node:os";
+import { arch, homedir, hostname, platform, release } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
 import {
@@ -32,6 +31,7 @@ import {
 } from "./outcome";
 import { redact } from "./redact";
 import { cliVersion, schemaVersion } from "./version";
+import { interruptWasRequested, trackInterruptCleanup } from "../util/process";
 
 /**
  * Runs live outside the workspace the agent is working in.
@@ -60,6 +60,27 @@ const evidenceIdSchema = z
 
 const artifactNameSchema = z.enum(["AGENT_INSTRUCTIONS.md", "AX.md", "results.json"]);
 const fileSystemErrorSchema = z.object({ code: z.string() }).loose();
+const verificationReleaseTimeoutMs = 30_000;
+const managedLockSchema = z
+  .object({
+    version: z.literal(1),
+    kind: z.enum(["verify", "commit", "write", "recover"]),
+    pid: z.number().int().positive().safe(),
+    hostname: z.string().min(1).max(255),
+    createdAt: z.iso.datetime(),
+    token: z.string().uuid(),
+    verificationToken: z.string().uuid(),
+  })
+  .strict();
+const legacyVerificationLockSchema = z
+  .object({
+    pid: z.number().int().positive().safe(),
+    createdAt: z.iso.datetime(),
+    token: z.string().uuid(),
+  })
+  .strict();
+type ManagedLock = z.infer<typeof managedLockSchema>;
+type ProcessStatus = "alive" | "absent" | "unknown";
 const executionMetadataSchema = z
   .object({
     cliVersion: z.string().min(1),
@@ -327,26 +348,47 @@ export async function writeRunRecord(
     await exclusiveAtomicWriteFile(path, `${JSON.stringify(parsed, null, 2)}\n`);
     await rm(join(location.directory, ".preparing"), { force: true });
   } else {
+    assertNotInterrupting();
     await assertVerificationSession(location, session);
+    assertNotInterrupting();
     const commitPath = join(location.directory, ".commit.lock");
-    let commit;
+    const commitToken = randomUUID();
+    const sessionToken = requireVerificationToken(location, session);
+    const commitLock = createManagedLock(
+      commitPath,
+      lockMetadata("commit", commitToken, sessionToken),
+    );
+    let commitWork: Promise<void> | undefined;
+    const untrackCommit = trackInterruptCleanup(async () => {
+      await commitLock.catch(() => undefined);
+      await commitWork?.catch(() => undefined);
+      await removeOwnedLock(commitPath, commitToken);
+    });
     try {
-      commit = await open(commitPath, "wx", 0o600);
+      await commitLock;
     } catch (error) {
+      await removeOwnedLock(commitPath, commitToken);
+      untrackCommit();
       const parsedError = fileSystemErrorSchema.safeParse(error);
       if (!parsedError.success || parsedError.data.code !== "EEXIST") throw error;
-      throw new Error(`Run ${parsed.runId} is already committing verification results.`);
+      throw new Error(
+        `Run ${parsed.runId} is already committing verification results. If its verifier stopped, run \`docs-trials recover ${parsed.runId}\`.`,
+      );
     }
     try {
-      await waitForVerificationWrites(location);
-      await assertPreparedForCommit(location, session);
-      await validateEvidenceReferences(location, parsed);
-      await atomicWriteFile(path, `${JSON.stringify(parsed, null, 2)}\n`, () =>
-        assertPreparedForCommit(location, session),
-      );
+      assertNotInterrupting();
+      commitWork = (async () => {
+        await waitForVerificationWrites(location);
+        await assertPreparedForCommit(location, session);
+        await validateEvidenceReferences(location, parsed);
+        await atomicWriteFile(path, `${JSON.stringify(parsed, null, 2)}\n`, () =>
+          assertPreparedForCommit(location, session),
+        );
+      })();
+      await commitWork;
     } finally {
-      await commit.close().catch(() => undefined);
-      await rm(commitPath, { force: true }).catch(() => undefined);
+      await removeOwnedLock(commitPath, commitToken);
+      untrackCommit();
     }
   }
   return path;
@@ -527,6 +569,20 @@ export async function writeArtifact(
   });
 }
 
+export async function resetVerificationOutputs(
+  location: RunLocation,
+  session: VerificationSession,
+): Promise<void> {
+  await assertLocationIdentity(location);
+  await withVerificationWrite(location, session, async () => {
+    await Promise.all([
+      rm(join(location.directory, "evidence"), { recursive: true, force: true }),
+      rm(join(location.directory, "AX.md"), { force: true }),
+      rm(join(location.directory, "results.json"), { force: true }),
+    ]);
+  });
+}
+
 export async function withVerificationLock<T>(
   runIdOrPath: string,
   operation: (
@@ -537,33 +593,44 @@ export async function withVerificationLock<T>(
 ): Promise<T> {
   const location = await resolveRunLocation(runIdOrPath);
   const lockPath = join(location.directory, ".verify.lock");
-  let lock: Awaited<ReturnType<typeof open>>;
+  const recoveryPath = join(location.directory, ".recover.lock");
+  if (await pathExists(recoveryPath)) {
+    throw new Error(`Run ${location.runId} is being recovered. Try verification again.`);
+  }
+  const session: VerificationSession = { [verificationSessionToken]: randomUUID() };
+  const verificationToken = session[verificationSessionToken];
+  const verificationLock = createManagedLock(
+    lockPath,
+    lockMetadata("verify", verificationToken, verificationToken),
+  );
+  const untrackLock = trackInterruptCleanup(async () => {
+    await verificationLock.catch(() => undefined);
+    await removeVerificationLock(location, verificationToken);
+  }, "owner");
   try {
-    lock = await open(lockPath, "wx", 0o600);
+    await verificationLock;
   } catch (error) {
+    await removeVerificationLock(location, verificationToken);
+    untrackLock();
     const parsedError = fileSystemErrorSchema.safeParse(error);
     if (!parsedError.success || parsedError.data.code !== "EEXIST") throw error;
     throw new Error(
-      `Run ${location.runId} is already being verified. If no verification process remains, remove ${lockPath}.`,
+      `Run ${location.runId} is already being verified. If its verifier stopped, run \`docs-trials recover ${location.runId}\`.`,
     );
   }
-  const session: VerificationSession = { [verificationSessionToken]: randomUUID() };
   try {
-    await lock.writeFile(
-      `${JSON.stringify({
-        pid: process.pid,
-        createdAt: new Date().toISOString(),
-        token: session[verificationSessionToken],
-      })}\n`,
-    );
+    assertNotInterrupting();
+    if (await pathExists(recoveryPath)) {
+      throw new Error(`Run ${location.runId} is being recovered. Try verification again.`);
+    }
     const record = await readRunRecordAt(location);
     if (record.status === "verified") {
       throw new Error(`Run ${record.runId} is already verified and cannot be overwritten.`);
     }
     return await operation(location, record, session);
   } finally {
-    await lock.close().catch(() => undefined);
-    await rm(lockPath, { force: true }).catch(() => undefined);
+    await removeVerificationLock(location, verificationToken);
+    untrackLock();
   }
 }
 
@@ -589,6 +656,22 @@ async function validateEvidenceReferences(
     if (!stats.isFile() || stats.isSymbolicLink()) {
       throw new Error(`Verified run ${record.runId} references invalid evidence ${safeId}.`);
     }
+  }
+  const evidenceDirectory = join(location.directory, "evidence");
+  let entries: Dirent[];
+  try {
+    entries = await readdir(evidenceDirectory, { withFileTypes: true });
+  } catch (error) {
+    const parsed = fileSystemErrorSchema.safeParse(error);
+    if (!parsed.success || parsed.data.code !== "ENOENT") throw error;
+    entries = [];
+  }
+  const expectedFiles = new Set([...references].map((id) => `${id}.txt`));
+  if (
+    entries.length !== expectedFiles.size ||
+    entries.some((entry) => !entry.isFile() || !expectedFiles.has(entry.name))
+  ) {
+    throw new Error(`Verified run ${record.runId} contains unreferenced evidence.`);
   }
 }
 
@@ -705,6 +788,7 @@ async function withVerificationWrite<T>(
   session: VerificationSession | undefined,
   operation: () => Promise<T>,
 ): Promise<T> {
+  assertNotInterrupting();
   const path = join(location.directory, "run.json");
   if (!(await pathExists(path))) return operation();
   const initialRecord = await readRunRecordAt(location);
@@ -712,10 +796,20 @@ async function withVerificationWrite<T>(
     throw new Error(`Run ${initialRecord.runId} is already verified and cannot be overwritten.`);
   }
   await assertVerificationSession(location, session);
+  assertNotInterrupting();
+  const sessionToken = requireVerificationToken(location, session);
   const leasePath = join(location.directory, `.write-${randomUUID()}`);
-  const lease = await open(leasePath, "wx", 0o600);
-  await lease.close();
+  const leaseToken = randomUUID();
+  const leaseLock = createManagedLock(leasePath, lockMetadata("write", leaseToken, sessionToken));
+  let activeWrite: Promise<T> | undefined;
+  const untrackLease = trackInterruptCleanup(async () => {
+    await leaseLock.catch(() => undefined);
+    await activeWrite?.catch(() => undefined);
+    await removeOwnedLock(leasePath, leaseToken);
+  });
   try {
+    await leaseLock;
+    assertNotInterrupting();
     if (await pathExists(join(location.directory, ".commit.lock"))) {
       throw new Error(`Run ${location.runId} is committing verification results.`);
     }
@@ -723,9 +817,11 @@ async function withVerificationWrite<T>(
     if (currentRecord.status !== "prepared") {
       throw new Error(`Run ${currentRecord.runId} is already verified and cannot be overwritten.`);
     }
-    return await operation();
+    activeWrite = operation();
+    return await activeWrite;
   } finally {
-    await rm(leasePath, { force: true }).catch(() => undefined);
+    await removeOwnedLock(leasePath, leaseToken);
+    untrackLease();
   }
 }
 
@@ -745,18 +841,164 @@ async function assertVerificationSession(
   session: VerificationSession | undefined,
 ): Promise<void> {
   if (!session) throw new Error(`Run ${location.runId} requires its active verification session.`);
-  const lockSchema = z.object({ token: z.string().uuid() }).loose();
   let lock;
   try {
-    lock = lockSchema.parse(
-      JSON.parse(await readFile(join(location.directory, ".verify.lock"), "utf8")),
+    const value: unknown = JSON.parse(
+      await readFile(join(location.directory, ".verify.lock"), "utf8"),
     );
+    lock = z.union([managedLockSchema, legacyVerificationLockSchema]).parse(value);
   } catch {
     throw new Error(`Run ${location.runId} no longer owns its verification lock.`);
   }
-  if (lock.token !== session[verificationSessionToken]) {
+  if (
+    ("kind" in lock && lock.kind !== "verify") ||
+    lock.token !== session[verificationSessionToken]
+  ) {
     throw new Error(`Run ${location.runId} no longer owns its verification lock.`);
   }
+}
+
+export type RecoveryResult = { runId: string; removed: string[] };
+
+/** Removes only run locks whose recorded local process is demonstrably absent. */
+export async function recoverRunLocks(
+  runIdOrPath: string,
+  processStatus: (pid: number) => ProcessStatus = localProcessStatus,
+  force = false,
+): Promise<RecoveryResult> {
+  const location = await resolveRunLocation(runIdOrPath);
+  const recoveryPath = join(location.directory, ".recover.lock");
+  const recoveryToken = randomUUID();
+  const recoveryLock = acquireRecoveryLock(location, recoveryToken, processStatus, force);
+  const untrackRecovery = trackInterruptCleanup(async () => {
+    await recoveryLock.catch(() => undefined);
+    await removeOwnedLock(recoveryPath, recoveryToken);
+  }, "owner");
+  try {
+    await recoveryLock;
+    assertNotInterrupting();
+    return await recoverLockedRun(location, processStatus, force);
+  } finally {
+    await removeOwnedLock(recoveryPath, recoveryToken);
+    untrackRecovery();
+  }
+}
+
+async function recoverLockedRun(
+  location: RunLocation,
+  processStatus: (pid: number) => ProcessStatus,
+  force: boolean,
+): Promise<RecoveryResult> {
+  const entries = await readdir(location.directory);
+  const names = entries
+    .filter(
+      (entry) =>
+        entry === ".verify.lock" || entry === ".commit.lock" || entry.startsWith(".write-"),
+    )
+    .sort();
+  if (names.length === 0) return { runId: location.runId, removed: [] };
+
+  const locks = new Map<string, ManagedLock | { exact: string }>();
+  let verification: ManagedLock | z.infer<typeof legacyVerificationLockSchema> | undefined;
+  let unverifiableVerification: string | undefined;
+  if (names.includes(".verify.lock")) {
+    const raw = await readLockText(join(location.directory, ".verify.lock"));
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      value = undefined;
+    }
+    const parsed = z.union([managedLockSchema, legacyVerificationLockSchema]).safeParse(value);
+    if (!parsed.success) {
+      if (!force) throw recoveryRefusal(location, ".verify.lock is malformed");
+      unverifiableVerification = raw;
+    } else if ("kind" in parsed.data && parsed.data.kind !== "verify") {
+      if (!force) throw recoveryRefusal(location, ".verify.lock has the wrong lock kind");
+      unverifiableVerification = raw;
+    } else {
+      verification = parsed.data;
+    }
+  }
+
+  for (const name of names) {
+    if (name === ".verify.lock") continue;
+    const path = join(location.directory, name);
+    const raw = await readLockText(path);
+    if (raw === "") {
+      if ((!verification || "kind" in verification) && !force) {
+        throw recoveryRefusal(location, `${name} has no ownership metadata`);
+      }
+      locks.set(name, { exact: raw });
+      continue;
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      value = undefined;
+    }
+    const parsed = managedLockSchema.safeParse(value);
+    if (!parsed.success) {
+      if (!force) throw recoveryRefusal(location, `${name} is malformed`);
+      locks.set(name, { exact: raw });
+      continue;
+    }
+    const expectedKind = name === ".commit.lock" ? "commit" : "write";
+    if (parsed.data.kind !== expectedKind) {
+      if (!force) throw recoveryRefusal(location, `${name} has the wrong lock kind`);
+      locks.set(name, { exact: raw });
+      continue;
+    }
+    if (verification && parsed.data.verificationToken !== verification.token) {
+      if (!force) {
+        throw recoveryRefusal(location, `${name} does not belong to the verification lock`);
+      }
+      locks.set(name, { exact: raw });
+      continue;
+    }
+    locks.set(name, parsed.data);
+  }
+
+  const owners = [
+    ...(verification ? [verification] : []),
+    ...[...locks.values()].filter((lock): lock is ManagedLock => !("exact" in lock)),
+  ];
+  for (const owner of owners) {
+    if ("hostname" in owner && owner.hostname !== hostname()) {
+      throw recoveryRefusal(location, `lock owner host ${owner.hostname} is not this host`);
+    }
+    const status = processStatus(owner.pid);
+    if (status !== "absent") {
+      throw recoveryRefusal(
+        location,
+        `process ${owner.pid} is ${status === "alive" ? "still running" : "not safely inspectable"}`,
+      );
+    }
+  }
+
+  const removed: string[] = [];
+  for (const name of [...names.filter((entry) => entry !== ".verify.lock"), ".verify.lock"]) {
+    if (!names.includes(name)) continue;
+    const lock = locks.get(name);
+    const path = join(location.directory, name);
+    const removedLock =
+      lock && !("exact" in lock)
+        ? await takeOwnedLock(path, lock.token)
+        : name === ".verify.lock" && verification
+          ? await takeOwnedLock(path, verification.token)
+          : await takeExactLock(
+              path,
+              name === ".verify.lock" ? (unverifiableVerification ?? "") : (lock?.exact ?? ""),
+            );
+    if (!removedLock) {
+      throw new Error(
+        `Recovery of run ${location.runId} stopped because ${name} changed. Previously removed locks: ${removed.join(", ") || "none"}.`,
+      );
+    }
+    removed.push(name);
+  }
+  return { runId: location.runId, removed };
 }
 
 async function waitForVerificationWrites(location: RunLocation): Promise<void> {
@@ -766,7 +1008,9 @@ async function waitForVerificationWrites(location: RunLocation): Promise<void> {
     if (!entries.some((entry) => entry.startsWith(".write-"))) return;
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
   }
-  throw new Error(`Timed out waiting for verification writes for run ${location.runId}.`);
+  throw new Error(
+    `Timed out waiting for verification writes for run ${location.runId}. If its verifier stopped, run \`docs-trials recover ${location.runId}\`.`,
+  );
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -778,4 +1022,207 @@ async function pathExists(path: string): Promise<boolean> {
     if (parsedError.success && parsedError.data.code === "ENOENT") return false;
     throw error;
   }
+}
+
+function lockMetadata(kind: ManagedLock["kind"], token: string, verificationToken: string) {
+  return managedLockSchema.parse({
+    version: 1,
+    kind,
+    pid: process.pid,
+    hostname: hostname(),
+    createdAt: new Date().toISOString(),
+    token,
+    verificationToken,
+  });
+}
+
+async function createManagedLock(path: string, metadata: ManagedLock): Promise<void> {
+  await exclusiveAtomicWriteFile(path, `${JSON.stringify(metadata)}\n`);
+}
+
+async function readLockText(path: string): Promise<string> {
+  const stats = await lstat(path);
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 4_096) {
+    throw new Error(`Lock path is not a bounded regular file: ${path}.`);
+  }
+  return readFile(path, "utf8");
+}
+
+async function removeOwnedLock(path: string, token: string): Promise<void> {
+  if (!(await lockHasToken(path, token))) return;
+  if (!(await takeOwnedLock(path, token))) {
+    throw new Error(`Lock ownership changed while releasing ${path}.`);
+  }
+}
+
+async function removeVerificationLock(location: RunLocation, token: string): Promise<void> {
+  const recoveryPath = join(location.directory, ".recover.lock");
+  const recoveryToken = randomUUID();
+  const deadline = Date.now() + verificationReleaseTimeoutMs;
+  for (;;) {
+    try {
+      await createManagedLock(recoveryPath, lockMetadata("recover", recoveryToken, recoveryToken));
+      break;
+    } catch (error) {
+      const parsed = fileSystemErrorSchema.safeParse(error);
+      if (!parsed.success || parsed.data.code !== "EEXIST") throw error;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `Timed out releasing verification ownership for run ${location.runId}. Run \`docs-trials recover ${location.runId}\` after the active recovery stops.`,
+        );
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+    }
+  }
+  try {
+    await removeOwnedLock(join(location.directory, ".verify.lock"), token);
+  } finally {
+    await removeOwnedLock(recoveryPath, recoveryToken);
+  }
+}
+
+async function acquireRecoveryLock(
+  location: RunLocation,
+  token: string,
+  processStatus: (pid: number) => ProcessStatus,
+  force: boolean,
+): Promise<void> {
+  const path = join(location.directory, ".recover.lock");
+  const metadata = lockMetadata("recover", token, token);
+  try {
+    await createManagedLock(path, metadata);
+    return;
+  } catch (error) {
+    const parsedError = fileSystemErrorSchema.safeParse(error);
+    if (!parsedError.success || parsedError.data.code !== "EEXIST") throw error;
+  }
+
+  let raw: string;
+  try {
+    raw = await readLockText(path);
+  } catch {
+    throw new Error(`Run ${location.runId} has an invalid recovery lock.`);
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    value = undefined;
+  }
+  const parsed = managedLockSchema.safeParse(value);
+  const existing = parsed.success ? parsed.data : undefined;
+  if (
+    existing?.kind === "recover" &&
+    existing.hostname === hostname() &&
+    processStatus(existing.pid) === "absent"
+  ) {
+    if (!(await takeOwnedLock(path, existing.token))) {
+      throw new Error(`Run ${location.runId} recovery ownership changed. Try again.`);
+    }
+  } else if (!existing || existing.kind !== "recover") {
+    if (!force) throw new Error(`Run ${location.runId} has an invalid recovery lock.`);
+    if (!(await takeExactLock(path, raw))) {
+      throw new Error(`Run ${location.runId} recovery ownership changed. Try again.`);
+    }
+  } else {
+    throw new Error(`Run ${location.runId} is already being recovered.`);
+  }
+  try {
+    await createManagedLock(path, metadata);
+  } catch (error) {
+    const parsedError = fileSystemErrorSchema.safeParse(error);
+    if (parsedError.success && parsedError.data.code === "EEXIST") {
+      throw new Error(`Run ${location.runId} is already being recovered.`);
+    }
+    throw error;
+  }
+}
+
+async function lockHasToken(path: string, token: string): Promise<boolean> {
+  try {
+    const value: unknown = JSON.parse(await readLockText(path));
+    const parsed = z.union([managedLockSchema, legacyVerificationLockSchema]).safeParse(value);
+    return parsed.success && parsed.data.token === token;
+  } catch {
+    return false;
+  }
+}
+
+async function takeOwnedLock(path: string, token: string): Promise<boolean> {
+  const quarantine = join(dirname(path), `.${basename(path)}.take-${randomUUID()}`);
+  try {
+    await rename(path, quarantine);
+  } catch (error) {
+    const parsed = fileSystemErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ENOENT") return true;
+    return false;
+  }
+  try {
+    const value: unknown = JSON.parse(await readLockText(quarantine));
+    const parsed = z.union([managedLockSchema, legacyVerificationLockSchema]).safeParse(value);
+    if (parsed.success && parsed.data.token === token) {
+      await rm(quarantine, { force: true });
+      return true;
+    }
+  } catch {
+    // A changed lock is restored below instead of being deleted.
+  }
+  try {
+    await link(quarantine, path);
+    await rm(quarantine, { force: true });
+  } catch {
+    // Preserve the quarantined file if another owner already recreated the path.
+  }
+  return false;
+}
+
+async function takeExactLock(path: string, expected: string): Promise<boolean> {
+  const quarantine = join(dirname(path), `.${basename(path)}.take-${randomUUID()}`);
+  try {
+    await rename(path, quarantine);
+  } catch {
+    return false;
+  }
+  try {
+    if ((await readLockText(quarantine)) === expected) {
+      await rm(quarantine, { force: true });
+      return true;
+    }
+  } catch {
+    // A changed lock is restored below instead of being deleted.
+  }
+  try {
+    await link(quarantine, path);
+    await rm(quarantine, { force: true });
+  } catch {
+    // Preserve the quarantined file if another owner already recreated the path.
+  }
+  return false;
+}
+
+function requireVerificationToken(
+  location: RunLocation,
+  session: VerificationSession | undefined,
+): string {
+  if (!session) throw new Error(`Run ${location.runId} requires its active verification session.`);
+  return session[verificationSessionToken];
+}
+
+function assertNotInterrupting(): void {
+  if (interruptWasRequested()) throw new Error("Docs Trials was interrupted.");
+}
+
+function localProcessStatus(pid: number): ProcessStatus {
+  try {
+    process.kill(pid, 0);
+    return "alive";
+  } catch (error) {
+    const parsed = fileSystemErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ESRCH") return "absent";
+    return "unknown";
+  }
+}
+
+function recoveryRefusal(location: RunLocation, detail: string): Error {
+  return new Error(`Cannot recover run ${location.runId}: ${detail}. No lock was removed.`);
 }

@@ -4,6 +4,7 @@ import { renderReport } from "../core/report";
 import { redact } from "../core/redact";
 import {
   currentRunMetadata,
+  resetVerificationOutputs,
   withVerificationLock,
   runRecordSchema,
   writeArtifact,
@@ -33,6 +34,7 @@ export async function verify(
   dependencies: VerifyDependencies = defaultDependencies,
 ) {
   return withVerificationLock(options.run, async (location, record, session) => {
+    await resetVerificationOutputs(location, session);
     const startedAt = dependencies.now().toISOString();
     const report = options.quiet ? () => {} : (line: string) => process.stderr.write(`  ${line}\n`);
 
@@ -74,14 +76,30 @@ export async function verify(
     if (record.baselineRevision) {
       const sourceDiff = await dependencies.readDiff(record.workspace, record.baselineRevision);
       await writeEvidence(location, "source-diff", sourceDiff.content, session);
+      emittedEvidence.add("source-diff");
       ungradedObservations.push({
         detail: redact(
           sourceDiff.complete
-            ? "Source changes against the prepared baseline were recorded."
-            : `Source changes against the prepared baseline were recorded incompletely: ${sourceDiff.detail}`,
+            ? "Git-visible source changes against the prepared baseline were recorded."
+            : `Git-visible source changes against the prepared baseline were recorded incompletely: ${sourceDiff.detail}`,
         ),
         evidenceIds: ["source-diff"],
       });
+      if (sourceDiff.ignoredPathsExcluded) {
+        ungradedObservations.push({
+          detail: "Git-ignored workspace paths were excluded from source evidence.",
+          evidenceIds: ["source-diff"],
+        });
+      }
+    }
+    const referencedEvidence = new Set([
+      ...baseline.results.flatMap((check) => check.evidenceIds),
+      ...ungradedObservations.flatMap((observation) => observation.evidenceIds),
+    ]);
+    for (const evidenceId of emittedEvidence) {
+      if (!referencedEvidence.has(evidenceId)) {
+        throw new Error(`Evidence ${evidenceId} was emitted but not linked to an observed result.`);
+      }
     }
 
     const omittedIds = new Set(baseline.omittedChecks.map((entry) => entry.id));

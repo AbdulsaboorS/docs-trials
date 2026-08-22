@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -79,6 +79,21 @@ describe("source diff evidence", () => {
     } finally {
       await rm(outside, { force: true });
     }
+  });
+
+  it("explicitly excludes ignored files from Git-visible source capture", async () => {
+    await writeFile(join(workspace, ".gitignore"), "ignored/\n");
+    await run("git", ["add", ".gitignore"], { cwd: workspace });
+    await run("git", ["commit", "--quiet", "-m", "ignore fixture"], { cwd: workspace });
+    baseline = (await run("git", ["rev-parse", "HEAD"], { cwd: workspace })).stdout.trim();
+    await mkdir(join(workspace, "ignored"));
+    await writeFile(join(workspace, "ignored", "runtime.js"), "export const value = 1;\n");
+
+    const diff = await readDiff(workspace, baseline);
+
+    expect(diff.complete).toBe(true);
+    expect(diff.ignoredPathsExcluded).toBe(true);
+    expect(diff.content).toContain("Git-ignored workspace paths are outside this source diff");
   });
 
   it("strictly bounds and marks truncated tracked evidence incomplete", async () => {

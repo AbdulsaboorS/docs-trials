@@ -11,7 +11,12 @@ const maximumUntrackedTextBytes = 128_000;
 const diagnosticReserveBytes = 256;
 
 export type GitBaseline = { revision: string; dirty: string[] };
-export type SourceDiff = { content: string; complete: boolean; detail: string };
+export type SourceDiff = {
+  content: string;
+  complete: boolean;
+  detail: string;
+  ignoredPathsExcluded: boolean;
+};
 type GitCollection = { output: Buffer; truncated: boolean; error?: string };
 
 /**
@@ -89,6 +94,18 @@ export async function readDiff(workspace: string, baselineRevision: string): Pro
     }
   }
 
+  const ignored = await collectGit(
+    cwd,
+    ["status", "--porcelain=v1", "-z", "--ignored=matching", "--", "."],
+    128_000,
+  );
+  if (ignored.error) issues.push(`ignored path inspection failed (${ignored.error})`);
+  if (ignored.truncated) issues.push("ignored path inspection was truncated");
+  const ignoredPathsExcluded = ignored.output.includes(Buffer.from("!! "));
+  if (ignoredPathsExcluded) {
+    append("\n# Excluded paths\nGit-ignored workspace paths are outside this source diff.\n");
+  }
+
   if (!content.trim() && issues.length === 0) {
     content = "No source change was recorded against the baseline revision.\n";
   }
@@ -100,6 +117,7 @@ export async function readDiff(workspace: string, baselineRevision: string): Pro
     content,
     complete: issues.length === 0,
     detail: summarizeIssues(issues),
+    ignoredPathsExcluded,
   };
 }
 

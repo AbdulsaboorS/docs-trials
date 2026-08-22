@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { redact } from "../core/redact";
 import { commandEnvironment, describeCommandEnvironment } from "../util/environment";
-import { delay, terminateProcessTree, trackChild } from "../util/process";
+import { delay, interruptWasRequested, terminateProcessTree, trackChild } from "../util/process";
 
 const maxOutputBytes = 200_000;
 const runFile = promisify(execFile);
@@ -65,6 +65,7 @@ export async function startPreview(
   timeoutSeconds: number,
   allowedEnvironment: readonly string[] = [],
 ): Promise<Preview> {
+  if (interruptWasRequested()) throw new Error("Docs Trials was interrupted.");
   const environment = commandEnvironment(allowedEnvironment, {
     FORCE_COLOR: "0",
     NO_COLOR: "1",
