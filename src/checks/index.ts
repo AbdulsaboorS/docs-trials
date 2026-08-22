@@ -366,6 +366,24 @@ function secretsResult(page: Extract<PageObservation, { available: true }>): Che
       ["browser"],
     );
   }
+  if (page.webSocketChannelsObserved > 0) {
+    const count = page.webSocketChannelsObserved;
+    return result(
+      "client-secrets",
+      "inconclusive",
+      `${count} WebSocket channel${count === 1 ? " was" : "s were"} observed, but channel messages were not captured for credential scanning.`,
+      ["browser"],
+    );
+  }
+  if (contentScan.textDecodingGapCount > 0) {
+    const count = contentScan.textDecodingGapCount;
+    return result(
+      "client-secrets",
+      "inconclusive",
+      `${count} complete textual response bod${count === 1 ? "y" : "ies"} could not be decoded for credential scanning. First: ${contentScan.gaps[0]}`,
+      ["browser"],
+    );
+  }
   const count = contentScan.responsesScanned;
   return count === 0
     ? result("client-secrets", "inconclusive", "No same-origin response body was captured.", [
@@ -449,6 +467,7 @@ function describe(page: PageObservation): string {
       pendingResources: page.pendingResources,
       serverErrors: page.serverErrors,
       externalOrigins: page.externalOrigins,
+      webSocketChannelsObserved: page.webSocketChannelsObserved,
       ungradedObservations: page.ungradedObservations,
       contentScan: page.contentScan,
       visibleContent: page.visibleContent,

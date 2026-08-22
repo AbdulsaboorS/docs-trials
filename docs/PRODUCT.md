@@ -70,21 +70,25 @@ The prepared trial contains only checks that apply to its declared lifecycle.
 An omitted optional step is listed outside the result set with its reason. It
 does not require a fake command or a fourth outcome.
 
-| Check              | Pass condition                                                |
-| ------------------ | ------------------------------------------------------------- |
-| install            | The declared install step exits successfully                  |
-| build              | The declared build step exits successfully                    |
-| boot               | The declared application answers at its exact URL             |
-| page load          | The entry page navigates without an HTTP error                |
-| visible content    | The page renders text or a meaningful visual surface          |
-| application errors | No uncaught or application console error occurs               |
-| resource loads     | Same-origin browser asset requests do not fail                |
-| server errors      | No observed response returns a server error                   |
-| client secrets     | Complete captured browser content contains no detected secret |
-| network egress     | External origins match the frozen allowlist                   |
+| Check              | Pass condition                                                       |
+| ------------------ | -------------------------------------------------------------------- |
+| install            | The declared install step exits successfully                         |
+| build              | The declared build step exits successfully                           |
+| boot               | The declared application answers at its exact URL                    |
+| page load          | The entry page navigates without an HTTP error                       |
+| visible content    | The page renders text or a meaningful visual surface                 |
+| application errors | No uncaught or application console error occurs                      |
+| resource loads     | Same-origin browser asset requests do not fail                       |
+| server errors      | No observed response returns a server error                          |
+| client secrets     | Complete same-origin HTTP response bodies contain no detected secret |
+| network egress     | External origins match the frozen allowlist                          |
 
 Visible content can be text, an image, SVG, canvas, video, iframe, or form
 control. A structural DOM shell alone is not content.
+
+The client-secrets check is inconclusive when a textual response cannot be
+decoded reliably or when the page opens a WebSocket because v0 does not capture
+WebSocket messages.
 
 The browser observes the entry page for a bounded period frozen in the
 manifest. It does not click controls or let a model explore. Task-specific

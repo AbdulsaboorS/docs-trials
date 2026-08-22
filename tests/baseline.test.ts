@@ -61,6 +61,7 @@ function browserContent(evidence: Array<{ id: string; content: string }>) {
     gaps: string[];
     knownGapCount: number;
     captureFaultCount: number;
+    textDecodingGapCount: number;
     responses: Array<{
       url: string;
       status: number;
@@ -247,6 +248,16 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     });
   });
 
+  it("records when ungraded browser failures exceed the evidence limit", async () => {
+    const { ungradedObservations } = await runBaseline(await manifest("fetch-flood"), fixture);
+
+    expect(ungradedObservations).toHaveLength(61);
+    expect(ungradedObservations.at(-1)).toEqual({
+      detail: expect.stringContaining("additional ungraded browser failures"),
+      evidenceIds: ["browser"],
+    });
+  });
+
   it("is inconclusive while a required same-origin asset remains pending", async () => {
     const { results } = await runBaseline(await manifest("hanging-asset"), fixture);
     expect(outcomeOf(results, "resource-loads")).toBe("inconclusive");
@@ -257,6 +268,22 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     async (mode) => {
       const { results } = await runBaseline(await manifest(mode), fixture);
       expect(outcomeOf(results, "client-secrets")).toBe("failed");
+    },
+  );
+
+  it("fails when a declared UTF-16 response delivers a credential", async () => {
+    const { results } = await runBaseline(await manifest("utf-16-secret"), fixture);
+
+    expect(outcomeOf(results, "client-secrets")).toBe("failed");
+  });
+
+  it.each(["unsupported-text-encoding", "invalid-text-encoding"])(
+    "makes client secrets inconclusive for %s",
+    async (mode) => {
+      const { results, evidence } = await runBaseline(await manifest(mode), fixture);
+
+      expect(outcomeOf(results, "client-secrets")).toBe("inconclusive");
+      expect(browserContent(evidence).textDecodingGapCount).toBeGreaterThan(0);
     },
   );
 
@@ -425,8 +452,16 @@ describe("runBaseline", { timeout: 120_000 }, () => {
   it("treats a same-authority WebSocket as same-origin", async () => {
     const run = await runBaseline(await manifest("websocket-same-authority"), fixture);
     expect(outcomeOf(run.results, "network-egress")).toBe("passed");
+    expect(outcomeOf(run.results, "client-secrets")).toBe("inconclusive");
     const browserEvidence = run.evidence.find((entry) => entry.id === "browser")?.content ?? "";
     expect(browserEvidence).toContain('"externalOrigins": []');
+    expect(browserEvidence).toContain('"webSocketChannelsObserved": 1');
+  });
+
+  it("keeps a detected credential ahead of an unscanned WebSocket channel", async () => {
+    const run = await runBaseline(await manifest("finding-plus-websocket"), fixture);
+
+    expect(outcomeOf(run.results, "client-secrets")).toBe("failed");
   });
 
   it("fails the build and marks everything downstream inconclusive", async () => {

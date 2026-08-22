@@ -14,7 +14,8 @@ const maxUrlChars = 500;
 const maxContentTypeChars = 200;
 const maxGapExamples = 3;
 const maxGapChars = 500;
-const defaultOperationTimeoutMs = 5_000;
+const defaultOperationTimeoutMs = 15_000;
+const pausedStreamSetupTimeoutMs = 250;
 
 type ContentDisposition = "complete" | "truncated" | "skipped" | "unavailable" | "pending";
 
@@ -34,6 +35,7 @@ export type ContentScan = {
   gaps: string[];
   knownGapCount: number;
   captureFaultCount: number;
+  textDecodingGapCount: number;
   responses: ContentResponse[];
 };
 
@@ -43,11 +45,21 @@ type ResponseState = {
   chunks: Buffer[];
   retainedBytes: number;
   streaming: boolean;
+  readyToStream: boolean;
   initialized: boolean;
   finished: boolean;
   unavailable: boolean;
   truncated: boolean;
   skipped: boolean;
+  streamFailed: boolean;
+  streamFailureDetail: string;
+  observedBeforeInitialization: number;
+  uncapturedBeforeInitialization: number;
+  retainedBeforeInitialization: number;
+  networkDataBytes: number;
+  bufferedBytes: number;
+  bufferedRetainedBytes: number;
+  streamAttempts: number;
 };
 
 const headerValueSchema = z.union([z.string(), z.number(), z.boolean()]);
@@ -69,7 +81,6 @@ const pausedEventSchema = z.object({
   networkId: z.string().optional(),
   request: z.object({ url: z.string() }),
   responseStatusCode: z.number().optional(),
-  responseHeaders: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
 });
 const pausedRequestIdSchema = z.object({ requestId: z.string() });
 const dataEventSchema = z.object({
@@ -84,8 +95,8 @@ type ContentCapture = { finish: () => Promise<ContentScan> };
 type ContentCaptureOptions = { operationTimeoutMs?: number };
 type CdpMethod =
   | "Network.enable"
-  | "Fetch.enable"
   | "Network.streamResourceContent"
+  | "Fetch.enable"
   | "Fetch.continueRequest"
   | "Fetch.disable"
   | "Network.disable";
@@ -153,6 +164,9 @@ export async function startContentCapture(
     if (!state) return;
     activeStates.set(entry.requestId, state);
     recordResponse(state, entry.response);
+    if (state.readyToStream && !state.streaming && !state.initialized) {
+      startStreaming(entry.requestId, state);
+    }
   });
 
   session.on("Fetch.requestPaused", (event) => {
@@ -164,34 +178,38 @@ export async function startContentCapture(
       return;
     }
     const entry = parsed.data;
-    if (!requestIdAllowed(entry.requestId)) return;
+    if (!requestIdAllowed(entry.requestId)) {
+      continueResponse(entry.requestId);
+      return;
+    }
     if (
       !collecting ||
       entry.networkId === undefined ||
       entry.responseStatusCode === undefined ||
-      !sameOrigin(entry.request.url, origin)
+      !sameOrigin(entry.request.url, origin) ||
+      !requestIdAllowed(entry.networkId)
     ) {
       continueResponse(entry.requestId);
       return;
     }
-    if (!requestIdAllowed(entry.networkId)) {
-      continueResponse(entry.requestId);
-      return;
-    }
-    const state = activeStates.get(entry.networkId) ?? createState(entry.request.url);
+    const networkId = entry.networkId;
+    const state = activeStates.get(networkId) ?? createState(entry.request.url);
     if (state) {
-      activeStates.set(entry.networkId, state);
-      recordResponse(state, {
-        url: entry.request.url,
-        status: entry.responseStatusCode,
-        mimeType: "",
-        headers: Object.fromEntries(
-          (entry.responseHeaders ?? []).map((header) => [header.name, header.value]),
-        ),
-      });
-      startStreaming(entry.networkId, state);
+      activeStates.set(networkId, state);
+      startStreaming(
+        networkId,
+        state,
+        Math.min(operationTimeoutMs, pausedStreamSetupTimeoutMs),
+        () => {
+          continueResponse(entry.requestId, state, () => {
+            state.readyToStream = true;
+            if (state.streamFailed) startStreaming(networkId, state);
+          });
+        },
+      );
+    } else {
+      continueResponse(entry.requestId);
     }
-    continueResponse(entry.requestId, state);
   });
 
   session.on("Network.dataReceived", (event) => {
@@ -205,21 +223,27 @@ export async function startContentCapture(
     if (!requestIdAllowed(entry.requestId)) return;
     const state = activeStates.get(entry.requestId);
     if (!state) return;
-    // streamResourceContent returns all bytes from events queued before its command response.
-    if (!state.initialized) return;
+    state.networkDataBytes += entry.dataLength;
+    if (!state.initialized) {
+      state.observedBeforeInitialization += entry.dataLength;
+    }
     if (entry.data === undefined) {
-      state.response.observedBytes += entry.dataLength;
-      if (entry.dataLength > 0) state.unavailable = true;
+      if (state.initialized) {
+        state.response.observedBytes += entry.dataLength;
+        if (entry.dataLength > 0) state.unavailable = true;
+      } else {
+        state.uncapturedBeforeInitialization += entry.dataLength;
+      }
       return;
     }
-    const decodedBytes = base64Bytes(entry.data);
-    if (decodedBytes !== entry.dataLength) {
+    const decoded = decodeBase64(entry.data);
+    if (!decoded || decoded.byteLength !== entry.dataLength) {
       state.response.observedBytes += entry.dataLength;
       state.unavailable = true;
-      recordFault("Network.dataReceived byte counts did not match.");
+      recordFault("Network.dataReceived contained invalid or mismatched base64 data.");
       return;
     }
-    retain(state, entry.data, decodedBytes);
+    retain(state, decoded, entry.dataLength);
   });
 
   session.on("Network.loadingFinished", (event) => finishRequest(event, false));
@@ -237,12 +261,9 @@ export async function startContentCapture(
   await sendWithin(
     session,
     "Fetch.enable",
-    {
-      patterns: [{ urlPattern: `${origin}*`, requestStage: "Response" }],
-    },
+    { patterns: [{ urlPattern: `${origin}*`, requestStage: "Response" }] },
     operationTimeoutMs,
   );
-
   return {
     finish: async () => {
       collecting = false;
@@ -255,30 +276,36 @@ export async function startContentCapture(
       let responsesScanned = 0;
       let bytesScanned = 0;
       let knownGapCount = 0;
+      let textDecodingGapCount = 0;
       for (const state of retainedStates) {
+        normalizeCapturedBody(state);
         finalize(state);
         if (!state.recorded) {
-          if (!state.finished) {
-            knownGapCount += 1;
-            addGap(`pending same-origin response: ${state.response.url}`);
-          }
+          knownGapCount += 1;
+          addGap(
+            `${state.finished ? "unrecorded" : "pending"} same-origin response: ${state.response.url}`,
+          );
           continue;
         }
         const body = Buffer.concat(state.chunks, state.retainedBytes);
-        if (findings.length < 20 && body.length > 0) {
-          findings.push(
-            ...findSecrets([{ url: state.response.url, body: body.toString("utf8") }]).slice(
-              0,
-              20 - findings.length,
-            ),
-          );
-        }
         if (state.response.disposition !== "complete") {
+          scanFindings(
+            state.response.url,
+            body,
+            decodeForPartialScan(body, state.response.contentType),
+          );
           knownGapCount += 1;
           addGap(`${state.response.disposition} same-origin response body: ${state.response.url}`);
           continue;
         }
         state.response.digest = createHash("sha256").update(body).digest("hex");
+        const decoded = decodeCompleteBody(body, state.response.contentType);
+        scanFindings(state.response.url, body, decoded.text);
+        if (decoded.status === "gap") {
+          textDecodingGapCount += 1;
+          addGap(`${decoded.gap} textual response encoding: ${state.response.url}`);
+          continue;
+        }
         responsesScanned += 1;
         bytesScanned += state.response.observedBytes;
       }
@@ -290,8 +317,14 @@ export async function startContentCapture(
         gaps: gapExamples,
         knownGapCount,
         captureFaultCount,
+        textDecodingGapCount,
         responses,
       };
+
+      function scanFindings(url: string, body: Buffer, text: string): void {
+        if (findings.length >= 20 || body.length === 0) return;
+        findings.push(...findSecrets([{ url, body: text }]).slice(0, 20 - findings.length));
+      }
     },
   };
 
@@ -307,20 +340,28 @@ export async function startContentCapture(
     if (!state) return;
     state.finished = true;
     if (failed) state.unavailable = true;
+    else if (state.streamFailed && !state.initialized) failStreaming(state);
     activeStates.delete(parsed.data.requestId);
   }
 
-  function retain(state: ResponseState, encoded: string, observedBytes: number): void {
+  function retain(
+    state: ResponseState,
+    chunk: Buffer,
+    observedBytes: number,
+    prepend = false,
+  ): void {
     state.response.observedBytes += observedBytes;
     if (state.unavailable || state.truncated || state.skipped || observedBytes === 0) return;
     const responseRemaining = maxResponseBytes - state.retainedBytes;
     const aggregateRemaining = maxAggregateBytes - retainedTotal;
     const retainedBytes = Math.min(observedBytes, responseRemaining, aggregateRemaining);
     if (retainedBytes > 0) {
-      const chunk = decodePrefix(encoded, retainedBytes);
-      state.chunks.push(chunk);
-      state.retainedBytes += chunk.byteLength;
-      retainedTotal += chunk.byteLength;
+      const retained = chunk.subarray(0, retainedBytes);
+      if (prepend) state.chunks.unshift(retained);
+      else state.chunks.push(retained);
+      state.retainedBytes += retained.byteLength;
+      retainedTotal += retained.byteLength;
+      if (!state.initialized) state.retainedBeforeInitialization += retained.byteLength;
     }
     if (retainedBytes >= observedBytes) return;
     if (state.retainedBytes === 0 && aggregateRemaining === 0) state.skipped = true;
@@ -344,11 +385,21 @@ export async function startContentCapture(
       chunks: [],
       retainedBytes: 0,
       streaming: false,
+      readyToStream: false,
       initialized: false,
       finished: false,
       unavailable: false,
       truncated: false,
       skipped: false,
+      streamFailed: false,
+      streamFailureDetail: "",
+      observedBeforeInitialization: 0,
+      uncapturedBeforeInitialization: 0,
+      retainedBeforeInitialization: 0,
+      networkDataBytes: 0,
+      bufferedBytes: 0,
+      bufferedRetainedBytes: 0,
+      streamAttempts: 0,
     };
     retainedStates.push(state);
     return state;
@@ -363,38 +414,154 @@ export async function startContentCapture(
     responses.push(state.response);
   }
 
-  function startStreaming(requestId: string, state: ResponseState): void {
-    if (state.streaming) return;
+  function startStreaming(
+    requestId: string,
+    state: ResponseState,
+    timeoutMs = operationTimeoutMs,
+    settled?: () => void,
+  ): void {
+    if (state.streaming || state.initialized || state.streamAttempts >= 2) return;
     state.streaming = true;
+    state.streamFailed = false;
+    state.streamAttempts += 1;
     if (!reserveOperation(state)) return;
     trackOperation(
       session.send("Network.streamResourceContent", { requestId }).then((value) => {
         const result = streamResultSchema.parse(value);
+        const buffered = decodeBase64(result.bufferedData);
+        if (!buffered) throw new Error("Buffered response data was not valid base64.");
+        if (bufferCoversPendingData(buffered, state)) {
+          state.chunks = [];
+          state.retainedBytes -= state.retainedBeforeInitialization;
+          retainedTotal -= state.retainedBeforeInitialization;
+          state.response.observedBytes = 0;
+          state.retainedBeforeInitialization = 0;
+        }
         state.initialized = true;
-        retain(state, result.bufferedData, base64Bytes(result.bufferedData));
+        state.streamFailed = false;
+        state.streamFailureDetail = "";
+        const bufferedBytes = buffered.byteLength;
+        state.bufferedBytes = bufferedBytes;
+        const retainedBeforeBuffer = state.retainedBytes;
+        retain(state, buffered, bufferedBytes, true);
+        state.bufferedRetainedBytes = state.retainedBytes - retainedBeforeBuffer;
+        state.response.observedBytes = Math.max(
+          state.response.observedBytes,
+          state.observedBeforeInitialization,
+        );
+        if (bufferedBytes < state.uncapturedBeforeInitialization) {
+          state.unavailable = true;
+          recordFault("Buffered response bytes did not cover pre-stream network data.");
+        }
       }),
-      () => {
-        state.initialized = true;
-        state.unavailable = true;
+      (error) => {
+        state.streaming = false;
+        state.streamFailed = true;
+        state.streamFailureDetail = errorDetail(error);
+        if (state.readyToStream && !state.finished && state.streamAttempts < 2) {
+          startStreaming(requestId, state);
+        } else if (state.finished || state.streamAttempts >= 2) {
+          failStreaming(state);
+        }
       },
+      timeoutMs,
+      settled,
     );
   }
 
-  function continueResponse(requestId: string, state?: ResponseState): void {
+  function continueResponse(
+    requestId: string,
+    state?: ResponseState,
+    continued?: () => void,
+  ): void {
     if (!reserveOperation(state)) return;
     trackOperation(
-      session.send("Fetch.continueRequest", { requestId }).then(() => undefined),
+      session.send("Fetch.continueRequest", { requestId }).then(() => continued?.()),
       () => {
         if (state) state.unavailable = true;
-        else recordFault("Could not continue an intercepted response.");
+        recordFault("Could not continue an intercepted response.");
       },
     );
   }
 
-  function trackOperation(operation: Promise<void>, failed: () => void): void {
-    const bounded = withTimeout(operation, operationTimeoutMs)
-      .catch(() => failed())
-      .finally(() => operations.delete(bounded));
+  function bufferCoversPendingData(buffered: Buffer, state: ResponseState): boolean {
+    const pendingBytes = state.retainedBeforeInitialization;
+    if (
+      pendingBytes === 0 ||
+      buffered.byteLength < state.observedBeforeInitialization ||
+      buffered.byteLength < pendingBytes
+    ) {
+      return false;
+    }
+    const pending = Buffer.concat(state.chunks, pendingBytes);
+    return buffered.subarray(buffered.byteLength - pendingBytes).equals(pending);
+  }
+
+  function normalizeCapturedBody(state: ResponseState): void {
+    if (
+      state.unavailable ||
+      state.truncated ||
+      state.skipped ||
+      !state.initialized ||
+      state.retainedBytes === 0
+    ) {
+      return;
+    }
+    const observedBytes = Math.max(state.networkDataBytes, state.bufferedBytes);
+    if (state.retainedBytes === observedBytes) {
+      state.response.observedBytes = observedBytes;
+      return;
+    }
+    if (state.retainedBytes < observedBytes) {
+      state.unavailable = true;
+      recordFault("Retained response bytes did not cover observed network data.");
+      return;
+    }
+    const overlapBytes = state.retainedBytes - observedBytes;
+    const bufferedEnd = state.bufferedRetainedBytes;
+    const body = Buffer.concat(state.chunks, state.retainedBytes);
+    const overlapIsExact =
+      overlapBytes <= bufferedEnd &&
+      bufferedEnd + overlapBytes <= body.byteLength &&
+      body
+        .subarray(bufferedEnd - overlapBytes, bufferedEnd)
+        .equals(body.subarray(bufferedEnd, bufferedEnd + overlapBytes));
+    if (!overlapIsExact) {
+      state.unavailable = true;
+      recordFault("Buffered and streamed response bytes had an unordered overlap.");
+      return;
+    }
+    const normalized = Buffer.concat([
+      body.subarray(0, bufferedEnd),
+      body.subarray(bufferedEnd + overlapBytes),
+    ]);
+    state.chunks = [normalized];
+    state.retainedBytes = normalized.byteLength;
+    retainedTotal -= overlapBytes;
+    state.response.observedBytes = observedBytes;
+  }
+
+  function failStreaming(state: ResponseState): void {
+    if (state.initialized) return;
+    state.initialized = true;
+    state.unavailable = true;
+    recordFault(
+      `Could not start bounded response streaming${state.streamFailureDetail ? `: ${state.streamFailureDetail}` : "."}`,
+    );
+  }
+
+  function trackOperation(
+    operation: Promise<void>,
+    failed: (error: Error) => void,
+    timeoutMs = operationTimeoutMs,
+    settled?: () => void,
+  ): void {
+    const bounded = withTimeout(operation, timeoutMs)
+      .catch((error: Error) => failed(error))
+      .finally(() => {
+        operations.delete(bounded);
+        settled?.();
+      });
     operations.add(bounded);
   }
 
@@ -406,7 +573,7 @@ export async function startContentCapture(
   }
 
   async function settleOperations(): Promise<void> {
-    await Promise.allSettled(operations);
+    while (operations.size > 0) await Promise.allSettled(operations);
   }
 
   async function teardown(method: "Fetch.disable" | "Network.disable"): Promise<void> {
@@ -471,15 +638,21 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise
         clearTimeout(timeout);
         resolve(value);
       },
-      () => {
+      (error) => {
         clearTimeout(timeout);
-        reject(new Error("CDP operation failed."));
+        reject(
+          error instanceof Error ? error : new Error(`CDP operation failed: ${String(error)}`),
+        );
       },
     );
   });
 }
 
 function finalize(state: ResponseState): void {
+  state.response.observedBytes = Math.max(
+    state.response.observedBytes,
+    state.observedBeforeInitialization,
+  );
   state.response.disposition =
     state.unavailable || !state.initialized
       ? "unavailable"
@@ -492,15 +665,16 @@ function finalize(state: ResponseState): void {
             : "pending";
 }
 
-function decodePrefix(value: string, bytes: number): Buffer {
-  const encodedChars = Math.ceil(bytes / 3) * 4;
-  return Buffer.from(value.slice(0, encodedChars), "base64").subarray(0, bytes);
-}
-
-function base64Bytes(value: string): number {
-  if (value.length === 0) return 0;
-  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
-  return Math.floor((value.length * 3) / 4) - padding;
+function decodeBase64(value: string): Buffer | undefined {
+  if (value === "") return Buffer.alloc(0);
+  if (
+    value.length % 4 !== 0 ||
+    !/^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/u.test(value)
+  ) {
+    return undefined;
+  }
+  const decoded = Buffer.from(value, "base64");
+  return decoded.toString("base64") === value ? decoded : undefined;
 }
 
 function contentType(response: CdpResponse): string {
@@ -508,6 +682,58 @@ function contentType(response: CdpResponse): string {
     ([name]) => name.toLowerCase() === "content-type",
   )?.[1];
   return z.string().safeParse(header).data ?? response.mimeType;
+}
+
+type DecodedBody =
+  | { status: "decoded"; text: string }
+  | { status: "gap"; text: string; gap: "invalid" | "unsupported" };
+
+function decodeCompleteBody(body: Buffer, contentType: string): DecodedBody {
+  if (!isTextualContentType(contentType)) {
+    return { status: "decoded", text: body.toString("latin1") };
+  }
+  const charset = declaredCharset(contentType);
+  try {
+    return { status: "decoded", text: new TextDecoder(charset, { fatal: true }).decode(body) };
+  } catch (error) {
+    return {
+      status: "gap",
+      text: body.toString("latin1"),
+      gap: error instanceof RangeError ? "unsupported" : "invalid",
+    };
+  }
+}
+
+function decodeForPartialScan(body: Buffer, contentType: string): string {
+  if (!isTextualContentType(contentType)) return body.toString("latin1");
+  try {
+    return new TextDecoder(declaredCharset(contentType)).decode(body);
+  } catch {
+    return body.toString("latin1");
+  }
+}
+
+function isTextualContentType(contentType: string): boolean {
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  return (
+    mediaType.startsWith("text/") ||
+    mediaType === "application/json" ||
+    mediaType.endsWith("+json") ||
+    mediaType === "application/javascript" ||
+    mediaType === "application/x-javascript" ||
+    mediaType === "application/xml" ||
+    mediaType.endsWith("+xml") ||
+    mediaType === "image/svg+xml"
+  );
+}
+
+function declaredCharset(contentType: string): string {
+  const match = /(?:^|;)\s*charset\s*=\s*(?:"([^"]+)"|'([^']+)'|([^;\s]+))/iu.exec(contentType);
+  return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "utf-8").trim();
+}
+
+function errorDetail(error: Error): string {
+  return redact(error.message).slice(0, maxGapChars);
 }
 
 function sameOrigin(value: string, origin: string): boolean {

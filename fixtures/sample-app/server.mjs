@@ -17,6 +17,8 @@ const scripts = {
   error: "throw new Error('deliberate fixture failure');",
   egress: "fetch('https://example.com/telemetry').catch(() => {});",
   "fetch-404": "fetch('/optional').catch(() => {});",
+  "fetch-flood":
+    "for (let index = 0; index < 70; index += 1) fetch('/optional?id=' + index).catch(() => {});",
   "correlated-console-error":
     "fetch('/optional').finally(() => console.error('net::ERR_FAILED ' + location.origin + '/optional'));",
   "json-secret": "fetch('/config.json').then((response) => response.json()).catch(() => {});",
@@ -31,8 +33,12 @@ const scripts = {
   "console-flood":
     "for (let index = 0; index < 70; index += 1) console.error('APPLICATION_ERROR_' + index); setTimeout(() => console.error('LATE_APPLICATION_ERROR'), 300);",
   "large-secret": `/* ${fakeCredential} ${"x".repeat(1_100_000)} */ console.log('ready');`,
+  "utf-16-secret": "fetch('/utf-16-secret').catch(() => {});",
+  "unsupported-text-encoding": "fetch('/unsupported-text').catch(() => {});",
+  "invalid-text-encoding": "fetch('/invalid-text').catch(() => {});",
   websocket: `new WebSocket(${JSON.stringify(process.env.WS_URL ?? "")});`,
   "websocket-same-authority": "new WebSocket('ws://' + location.host + '/socket');",
+  "finding-plus-websocket": `const key = '${fakeCredential}'; new WebSocket('ws://' + location.host + '/socket'); console.log(key.length);`,
 };
 
 const visibleBody =
@@ -108,6 +114,23 @@ const server = createServer((request, response) => {
   if (request.url === "/secret.css") {
     response.writeHead(200, { "content-type": "text/css" });
     response.end(`/* ${fakeCredential} */ body { color: black; }`);
+    return;
+  }
+  if (request.url === "/utf-16-secret") {
+    response.writeHead(200, { "content-type": "text/plain; charset=utf-16le" });
+    response.end(Buffer.from(fakeCredential, "utf16le"));
+    return;
+  }
+  if (request.url === "/unsupported-text") {
+    response.writeHead(200, {
+      "content-type": "text/plain; charset=docs-trials-unsupported",
+    });
+    response.end("ordinary text");
+    return;
+  }
+  if (request.url === "/invalid-text") {
+    response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+    response.end(Buffer.from([0xc3, 0x28]));
     return;
   }
   if (request.url?.startsWith("/missing.") || request.url === "/missing-frame") {

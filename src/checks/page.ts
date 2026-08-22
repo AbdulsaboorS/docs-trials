@@ -33,6 +33,7 @@ export type PageObservation =
       pendingResources: string[];
       serverErrors: string[];
       externalOrigins: string[];
+      webSocketChannelsObserved: number;
       ungradedObservations: UngradedObservation[];
       contentScan: ContentScan;
       visibleContent: VisibleContent | undefined;
@@ -63,7 +64,9 @@ export async function observePage(
   const resourceFailures: string[] = [];
   const serverErrors: string[] = [];
   const ungradedObservations: UngradedObservation[] = [];
+  let droppedUngradedObservations = 0;
   const externalOrigins = new Set<string>();
+  let webSocketChannelsObserved = 0;
   const pendingResources = new Map<Request, string>();
   const failedResources = new Set<Request>();
   const declaredManifestUrls = new Set<string>();
@@ -92,6 +95,7 @@ export async function observePage(
     });
     page.on("websocket", (webSocket) => {
       if (!collecting) return;
+      webSocketChannelsObserved = Math.min(Number.MAX_SAFE_INTEGER, webSocketChannelsObserved + 1);
       const origin = safeOrigin(webSocket.url());
       if (origin && origin !== previewOrigin) externalOrigins.add(origin);
     });
@@ -166,6 +170,12 @@ export async function observePage(
       await page.waitForTimeout(Math.min(observationWindowSeconds * 1_000, remaining(deadline)));
     }
     collecting = false;
+    if (droppedUngradedObservations > 0) {
+      ungradedObservations.push({
+        detail: `${droppedUngradedObservations} additional ungraded browser failure${droppedUngradedObservations === 1 ? " was" : "s were"} not retained after the evidence limit was reached.`,
+        evidenceIds: ["browser"],
+      });
+    }
     const pendingResourceSnapshot = [...pendingResources.values()].sort();
 
     const contentScan = await contentCapture.finish();
@@ -184,6 +194,7 @@ export async function observePage(
       pendingResources: pendingResourceSnapshot,
       serverErrors,
       externalOrigins: [...externalOrigins].sort(),
+      webSocketChannelsObserved,
       ungradedObservations,
       contentScan,
       visibleContent: surface?.visibleContent,
@@ -210,7 +221,10 @@ export async function observePage(
   }
 
   function pushUngraded(detail: string): void {
-    if (ungradedObservations.length >= maxMessages) return;
+    if (ungradedObservations.length >= maxMessages) {
+      droppedUngradedObservations += 1;
+      return;
+    }
     ungradedObservations.push({
       detail: redact(detail).slice(0, maxMessageChars),
       evidenceIds: ["browser"],
