@@ -1,0 +1,33 @@
+docs/PRODUCT.md
+  s_48261a8d6eaeb8::t_7920ac14ea035a 73-84,89-92
+src/checks/content.ts
+  s_48261a8d6eaeb8::t_99fdca179c78fd 17-18,38,48,54-62,99,167-169,181-184,189-190,195-196,198-211,226-229,231-236,239-240,243,246,264,279,281,284-287,292-296,302-308,320,323-327,343,347-352,359-364,388,394-402,417-423,425-426,431-439,441-455,457-465,467-468,472-476,479,482,487-564,576,641,643-645,652-655,668-677,687-738
+src/checks/index.ts
+  s_2a74f6c3f92c6e::t_99024d20da3f25 369-386,470
+src/checks/page.ts
+  s_48261a8d6eaeb8::t_0e4808dba43ef5 36,67,69,98,173-178,197,224-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d040b2e5941cb5a376f60bf73c3640a8c1ea2d95",
+  "prompts": {},
+  "sessions": {
+    "s_2a74f6c3f92c6e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fd58f5dc1ffePIguCn25vKRzzN",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_48261a8d6eaeb8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fd58fa168ffeNXoERzaPro1Pix",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
