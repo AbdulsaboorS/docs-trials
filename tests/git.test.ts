@@ -84,7 +84,20 @@ describe("source diff evidence", () => {
   it("explicitly excludes ignored files from Git-visible source capture", async () => {
     await writeFile(join(workspace, ".gitignore"), "ignored/\n");
     await run("git", ["add", ".gitignore"], { cwd: workspace });
-    await run("git", ["commit", "--quiet", "-m", "ignore fixture"], { cwd: workspace });
+    await run(
+      "git",
+      [
+        "-c",
+        "user.name=Docs Trials",
+        "-c",
+        "user.email=docs@example.com",
+        "commit",
+        "--quiet",
+        "-m",
+        "ignore fixture",
+      ],
+      { cwd: workspace },
+    );
     baseline = (await run("git", ["rev-parse", "HEAD"], { cwd: workspace })).stdout.trim();
     await mkdir(join(workspace, "ignored"));
     await writeFile(join(workspace, "ignored", "runtime.js"), "export const value = 1;\n");
