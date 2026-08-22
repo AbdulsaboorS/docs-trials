@@ -1,15 +1,16 @@
 import type { Manifest } from "../core/manifest";
-import { result, type CheckResult } from "../core/outcome";
+import { result, type CheckId, type CheckResult } from "../core/outcome";
 import { runCommand, succeeded, type CommandOutcome } from "./command";
 import { observePage, type PageObservation } from "./page";
 import { startPreview } from "./preview";
-import { findSecrets } from "./secrets";
 
 export type BaselineEvidence = { id: string; content: string };
 
 export type BaselineRun = {
   results: CheckResult[];
   evidence: BaselineEvidence[];
+  ungradedObservations: string[];
+  omittedChecks: Array<{ id: CheckId; reason: string }>;
 };
 
 type Reporter = (message: string) => void;
@@ -29,6 +30,8 @@ export async function runBaseline(
 ): Promise<BaselineRun> {
   const results: CheckResult[] = [];
   const evidence: BaselineEvidence[] = [];
+  const ungradedObservations: string[] = [];
+  const omittedChecks: BaselineRun["omittedChecks"] = [];
   const { run } = manifest;
 
   report(`install: ${run.install}`);
@@ -38,7 +41,7 @@ export async function runBaseline(
 
   let build: CommandOutcome | undefined;
   if (!run.build) {
-    results.push(result("build", "inconclusive", "The manifest declares no build command.", []));
+    omittedChecks.push({ id: "build", reason: "The manifest declares no build command." });
   } else if (!succeeded(install)) {
     results.push(
       result("build", "inconclusive", "Skipped because dependency installation did not succeed.", [
@@ -55,9 +58,10 @@ export async function runBaseline(
   const buildBlocked = !succeeded(install) || (build !== undefined && !succeeded(build));
   if (buildBlocked) {
     const detail = "Skipped because the project did not install and build.";
-    results.push(result("boot", "inconclusive", detail, []));
-    results.push(...browserUnavailable(detail, []));
-    return { results, evidence };
+    const blockingEvidence = !succeeded(install) ? ["install"] : ["build"];
+    results.push(result("boot", "inconclusive", detail, blockingEvidence));
+    results.push(...browserUnavailable(detail, blockingEvidence));
+    return { results, evidence, ungradedObservations, omittedChecks };
   }
 
   report(`boot: ${run.start}`);
@@ -75,7 +79,14 @@ export async function runBaseline(
         ),
       );
       results.push(...browserUnavailable(preview.detail, ["boot"]));
-      return { results, evidence };
+      return { results, evidence, ungradedObservations, omittedChecks };
+    }
+
+    const ownershipDetail = `${run.url} changed listener ownership after the start command answered, so Docs Trials cannot trust the observed page.`;
+    if (!(await preview.confirmOwnership())) {
+      results.push(result("boot", "inconclusive", ownershipDetail, ["boot"]));
+      results.push(...browserUnavailable(ownershipDetail, ["boot"]));
+      return { results, evidence, ungradedObservations, omittedChecks };
     }
 
     results.push(
@@ -83,20 +94,30 @@ export async function runBaseline(
     );
 
     report(`observe: ${run.url}`);
-    const page = await observePage(run.url, 45);
+    const page = await observePage(run.url, 45, run.observationWindowSeconds);
     evidence.push({ id: "browser", content: describe(page) });
+
+    if (!(await preview.confirmOwnership())) {
+      const bootIndex = results.findIndex((entry) => entry.id === "boot");
+      results[bootIndex] = result("boot", "inconclusive", ownershipDetail, ["boot"]);
+      results.push(...browserUnavailable(ownershipDetail, ["boot", "browser"]));
+      return { results, evidence, ungradedObservations, omittedChecks };
+    }
 
     if (!page.available) {
       results.push(...browserUnavailable(page.detail, ["browser"]));
-      return { results, evidence };
+      return { results, evidence, ungradedObservations, omittedChecks };
     }
 
     results.push(pageLoadResult(page));
+    results.push(visibleContentResult(page));
     results.push(consoleResult(page));
+    results.push(resourceLoadResult(page));
     results.push(serverErrorResult(page));
     results.push(secretsResult(page));
     results.push(egressResult(page, manifest.allowedOrigins));
-    return { results, evidence };
+    ungradedObservations.push(...page.ungradedObservations);
+    return { results, evidence, ungradedObservations, omittedChecks };
   } finally {
     await preview.stop();
   }
@@ -113,7 +134,20 @@ function commandResult(
     ]);
   }
   if (command.timedOut) {
-    return result(id, "failed", `${label} exceeded its time limit.`, [id]);
+    return result(
+      id,
+      "inconclusive",
+      `${label} exceeded its time limit, so no exit result was observed.`,
+      [id],
+    );
+  }
+  if (command.exitCode === 127) {
+    return result(
+      id,
+      "inconclusive",
+      `${label} exited with code 127. Docs Trials cannot distinguish unavailable host tooling from an intentional exit.`,
+      [id],
+    );
   }
   return command.exitCode === 0
     ? result(id, "passed", `${label} completed in ${Math.round(command.durationMs / 1000)}s.`, [id])
@@ -144,19 +178,88 @@ function consoleResult(page: Extract<PageObservation, { available: true }>): Che
     );
   }
   const total = page.consoleErrors.length + page.pageErrors.length;
-  const note = page.resourceErrors.length
-    ? ` ${page.resourceErrors.length} resource load complaint(s) were recorded separately under network egress.`
-    : "";
+  if (total === 0 && page.droppedConsoleErrors > 0) {
+    return result(
+      "console-errors",
+      "inconclusive",
+      `${page.droppedConsoleErrors} additional browser console error${page.droppedConsoleErrors === 1 ? " was" : "s were"} not retained after the evidence limit was reached.`,
+      ["browser"],
+    );
+  }
   if (total === 0) {
-    return result("console-errors", "passed", `No uncaught or console error.${note}`, ["browser"]);
+    return result("console-errors", "passed", "No uncaught or application console error.", [
+      "browser",
+    ]);
   }
   const first = [...page.pageErrors, ...page.consoleErrors][0] ?? "";
   return result(
     "console-errors",
     "failed",
-    `${total} application error${total === 1 ? "" : "s"}. First: ${first}${note}`,
+    `${total} application error${total === 1 ? "" : "s"}. First: ${first}`,
     ["browser"],
   );
+}
+
+function visibleContentResult(page: Extract<PageObservation, { available: true }>): CheckResult {
+  if (!page.navigated) {
+    return result(
+      "visible-content",
+      "inconclusive",
+      "The page did not load, so its rendered content could not be inspected.",
+      ["browser"],
+    );
+  }
+  if (page.visibleContent === undefined) {
+    return result(
+      "visible-content",
+      "inconclusive",
+      page.visibleContentDetail ?? "The rendered page could not be inspected.",
+      ["browser"],
+    );
+  }
+  return page.visibleContent === null
+    ? result(
+        "visible-content",
+        "failed",
+        "The page rendered no visible text or meaningful visual surface.",
+        ["browser"],
+      )
+    : result(
+        "visible-content",
+        "passed",
+        `The page rendered visible ${page.visibleContent.kind.replace("-", " ")}.`,
+        ["browser"],
+      );
+}
+
+function resourceLoadResult(page: Extract<PageObservation, { available: true }>): CheckResult {
+  if (page.resourceFailures.length > 0) {
+    const count = page.resourceFailures.length;
+    return result(
+      "resource-loads",
+      "failed",
+      `${count} same-origin browser asset failure${count === 1 ? "" : "s"}. First: ${page.resourceFailures[0]}`,
+      ["browser"],
+    );
+  }
+  if (page.pendingResources.length > 0) {
+    const count = page.pendingResources.length;
+    return result(
+      "resource-loads",
+      "inconclusive",
+      `${count} same-origin browser asset${count === 1 ? " was" : "s were"} still pending. First: ${page.pendingResources[0]}`,
+      ["browser"],
+    );
+  }
+  if (!page.navigated) {
+    return result(
+      "resource-loads",
+      "inconclusive",
+      "The page did not load, so browser assets could not be observed.",
+      ["browser"],
+    );
+  }
+  return result("resource-loads", "passed", "Same-origin browser assets loaded.", ["browser"]);
 }
 
 function serverErrorResult(page: Extract<PageObservation, { available: true }>): CheckResult {
@@ -179,27 +282,35 @@ function serverErrorResult(page: Extract<PageObservation, { available: true }>):
 }
 
 function secretsResult(page: Extract<PageObservation, { available: true }>): CheckResult {
-  if (page.assets.length === 0) {
-    return result("client-secrets", "inconclusive", "No browser-delivered asset was captured.", [
-      "browser",
-    ]);
-  }
-  const findings = findSecrets(page.assets);
-  if (findings.length === 0) {
+  const { contentScan } = page;
+  if (contentScan.findings.length > 0) {
+    const first = contentScan.findings[0];
     return result(
       "client-secrets",
-      "passed",
-      `No credential-shaped value in ${page.assets.length} browser-delivered asset(s).`,
+      "failed",
+      `${contentScan.findings.length} credential-shaped value(s) served to the browser. First: ${first?.kind} ${first?.sample} in ${first?.asset}`,
       ["browser"],
     );
   }
-  const first = findings[0];
-  return result(
-    "client-secrets",
-    "failed",
-    `${findings.length} credential-shaped value(s) served to the browser. First: ${first?.kind} ${first?.sample} in ${first?.asset}`,
-    ["browser"],
-  );
+  if (contentScan.gaps.length > 0) {
+    return result(
+      "client-secrets",
+      "inconclusive",
+      `${contentScan.gaps.length} same-origin response body capture gap(s). First: ${contentScan.gaps[0]}`,
+      ["browser"],
+    );
+  }
+  const count = contentScan.responsesScanned;
+  return count === 0
+    ? result("client-secrets", "inconclusive", "No same-origin response body was captured.", [
+        "browser",
+      ])
+    : result(
+        "client-secrets",
+        "passed",
+        `No credential-shaped value in ${count} complete same-origin response${count === 1 ? "" : "s"} (${contentScan.bytesScanned} bytes).`,
+        ["browser"],
+      );
 }
 
 function egressResult(
@@ -219,7 +330,7 @@ function egressResult(
       "browser",
     ]);
   }
-  const allowedOrigins = new Set(allowed.map((value) => new URL(value).origin));
+  const allowedOrigins = new Set(allowed.map(normalizeNetworkOrigin));
   const unexpected = page.externalOrigins.filter((origin) => !allowedOrigins.has(origin));
   if (unexpected.length === 0) {
     return result(
@@ -245,10 +356,19 @@ function egressResult(
   );
 }
 
+function normalizeNetworkOrigin(value: string): string {
+  const url = new URL(value);
+  if (url.protocol === "ws:") url.protocol = "http:";
+  if (url.protocol === "wss:") url.protocol = "https:";
+  return url.origin;
+}
+
 function browserUnavailable(detail: string, evidenceIds: string[]): CheckResult[] {
   const affected = [
     "page-load",
+    "visible-content",
     "console-errors",
+    "resource-loads",
     "server-errors",
     "client-secrets",
     "network-egress",
@@ -265,11 +385,16 @@ function describe(page: PageObservation): string {
       httpStatus: page.httpStatus,
       title: page.title,
       consoleErrors: page.consoleErrors,
+      droppedConsoleErrors: page.droppedConsoleErrors,
       pageErrors: page.pageErrors,
-      resourceErrors: page.resourceErrors,
+      resourceFailures: page.resourceFailures,
+      pendingResources: page.pendingResources,
       serverErrors: page.serverErrors,
       externalOrigins: page.externalOrigins,
-      assetsCaptured: page.assets.map((asset) => asset.url),
+      ungradedObservations: page.ungradedObservations,
+      contentScan: page.contentScan,
+      visibleContent: page.visibleContent,
+      visibleContentDetail: page.visibleContentDetail,
       bodyTextSample: page.bodyTextSample,
     },
     null,

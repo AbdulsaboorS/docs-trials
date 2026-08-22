@@ -24,11 +24,24 @@ const patterns: Array<{ pattern: RegExp; replacement: string }> = [
     replacement: "$1[REDACTED]",
   },
   {
+    pattern: new RegExp(
+      `(^|[\\s,{]|--)(["']?(?:${secretKey})["']?\\s*[:=]\\s*)(?!["']|\\[REDACTED\\])(?=[^\\s,;{}()[\\]"']*[0-9._~+/=-])[^\\s,;{}()[\\]"']+`,
+      "gim",
+    ),
+    replacement: "$1$2[REDACTED]",
+  },
+  {
     pattern: new RegExp(`^(\\s*[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)\\s*=\\s*)\\S+`, "gim"),
     replacement: "$1[REDACTED]",
   },
   {
-    pattern: /(\bauthorization\s*[:=]\s*["']?)(?!\[REDACTED\])[^\s,;"'\n]+/gi,
+    pattern:
+      /(\bauthorization\s*[:=]\s*)(["'])(?:Basic|Bearer|ApiKey|Digest|Token|AWS4-HMAC-SHA256)\s+(?!\[REDACTED\])[^\r\n]*?\2/gi,
+    replacement: "$1$2[REDACTED]$2",
+  },
+  {
+    pattern:
+      /^((?:[^\r\n]*?>\s*)?authorization\s*[:=]\s*)(?!\[REDACTED\])(?:Basic|Bearer|ApiKey|Digest|Token|AWS4-HMAC-SHA256)\s+[^\r\n]+$/gim,
     replacement: "$1[REDACTED]",
   },
   {

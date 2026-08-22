@@ -40,6 +40,7 @@ export const manifestSchema = z
           .default("http://127.0.0.1:5173"),
         startupTimeoutSeconds: z.number().int().min(1).max(300).default(60),
         commandTimeoutSeconds: z.number().int().min(1).max(1800).default(600),
+        observationWindowSeconds: z.number().int().min(1).max(60).default(5),
       })
       .strict(),
     allowedOrigins: z.array(z.url()).default([]),
@@ -82,4 +83,9 @@ export function docLabel(doc: ManifestDoc): string {
   const labeledUrl = labeledUrlDocSchema.safeParse(doc);
   if (labeledUrl.success) return `${labeledUrl.data.label}: ${labeledUrl.data.url}`;
   return `${inlineTextDocSchema.parse(doc).label} (inline text)`;
+}
+
+export function inlineText(doc: ManifestDoc): { label: string; text: string } | undefined {
+  const parsed = inlineTextDocSchema.safeParse(doc);
+  return parsed.success ? parsed.data : undefined;
 }

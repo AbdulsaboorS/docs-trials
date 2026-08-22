@@ -14,7 +14,10 @@ const manifest = manifestSchema.parse({
   run: { start: "node server.mjs" },
 });
 
-function record(results: CheckResult[], outcome: "passed" | "failed" | "inconclusive"): RunRecord {
+function record(
+  results: CheckResult[],
+  outcome: "passed" | "failed" | "inconclusive",
+): Extract<RunRecord, { status: "verified" }> {
   return {
     runId: "sample-20260804-120000",
     status: "verified",
@@ -27,11 +30,30 @@ function record(results: CheckResult[], outcome: "passed" | "failed" | "inconclu
       completedAt: "2026-08-04T12:01:30.000Z",
       outcome,
       results,
+      omittedChecks: [],
     },
   };
 }
 
 describe("renderReport", () => {
+  it.each(["passed", "failed", "inconclusive"] as const)(
+    "opens a %s report with the baseline outcome and task limitation",
+    (outcome) => {
+      const markdown = renderReport(record([result("install", outcome, "observed")], outcome));
+      const limitation = "**Task fulfillment was not verified.**";
+
+      expect(markdown.split("\n").slice(0, 5)).toEqual([
+        "# Agent Experience Report",
+        "",
+        `**BASELINE ${outcome.toUpperCase()}**`,
+        "",
+        limitation,
+      ]);
+      expect(markdown.indexOf(limitation)).toBeLessThan(markdown.indexOf("- Trial:"));
+      expect(markdown.indexOf(limitation)).toBeLessThan(markdown.indexOf("## Task"));
+    },
+  );
+
   it("labels author goals as not verified", () => {
     const markdown = renderReport(
       record(
@@ -59,7 +81,28 @@ describe("renderReport", () => {
     const partial = [result("install", "passed", "ok")];
     const markdown = renderReport(record(partial, "inconclusive"));
     expect(markdown).toContain("This check did not run.");
-    expect(markdown).toContain("**INCONCLUSIVE**");
+    expect(markdown).toContain("**BASELINE INCONCLUSIVE**");
+  });
+
+  it("links every recorded evidence reference", () => {
+    const markdown = renderReport(
+      record([result("install", "passed", "ok", ["install"])], "inconclusive"),
+    );
+    expect(markdown).toContain("[install](evidence/install.txt)");
+  });
+
+  it("lists lifecycle checks that were omitted without assigning an outcome", () => {
+    const base = record([result("install", "passed", "ok", ["install"])], "inconclusive");
+    const markdown = renderReport({
+      ...base,
+      verification: {
+        ...base.verification,
+        omittedChecks: [{ id: "build", reason: "No build command was declared." }],
+      },
+    });
+    expect(markdown).toContain("## Omitted checks");
+    expect(markdown).toContain("No build command was declared.");
+    expect(markdown).not.toContain("The project builds successfully. | This check did not run.");
   });
 
   it("separates observed failures from unresolved checks", () => {
@@ -75,8 +118,32 @@ describe("renderReport", () => {
     expect(markdown).toContain("does not mean the");
   });
 
+  it("lists observations that did not affect a check outcome", () => {
+    const base = record([result("install", "passed", "ok")], "inconclusive");
+    if (!base.verification) throw new Error("Expected a verified test record.");
+    const withUngraded = {
+      ...base,
+      verification: {
+        ...base.verification,
+        ungradedObservations: ["404 http://127.0.0.1/optional"],
+      },
+    };
+    const markdown = renderReport(withUngraded);
+    expect(markdown).toContain("## Ungraded observations");
+    expect(markdown).toContain("404 http://127.0.0.1/optional");
+    expect(markdown).toContain("did not change a baseline check result");
+  });
+
   it("refuses to render before verification", () => {
-    const unverified = { ...record([], "inconclusive"), verification: undefined };
+    const verified = record([], "inconclusive");
+    const unverified: RunRecord = {
+      runId: verified.runId,
+      status: "prepared",
+      manifest: verified.manifest,
+      manifestDigest: verified.manifestDigest,
+      workspace: verified.workspace,
+      preparedAt: verified.preparedAt,
+    };
     expect(() => renderReport(unverified)).toThrow(/before verification/);
   });
 });

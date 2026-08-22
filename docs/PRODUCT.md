@@ -78,7 +78,7 @@ does not require a fake command or a fourth outcome.
 | page load          | The entry page navigates without an HTTP error                |
 | visible content    | The page renders text or a meaningful visual surface          |
 | application errors | No uncaught or application console error occurs               |
-| resource loads     | Required same-origin resources do not fail                    |
+| resource loads     | Same-origin browser asset requests do not fail                |
 | server errors      | No observed response returns a server error                   |
 | client secrets     | Complete captured browser content contains no detected secret |
 | network egress     | External origins match the frozen allowlist                   |
@@ -104,6 +104,9 @@ Each `verify` creates an immutable attempt. It never overwrites earlier
 evidence. Every attempt records the CLI, operating system, Node version, agent
 product, optional model, starter revision, documentation digests, commands, and
 timestamps.
+
+Immutability describes CLI behavior. Local attempt files are not authenticated
+against another process that uses the operator's account.
 
 ## Findings And Recommendations
 
@@ -142,6 +145,7 @@ but cannot change stored outcomes.
 ## Security And Trust
 
 - Commands execute with the operator's user account and are not sandboxed.
+- Lifecycle commands must remain in the foreground. Detached processes are unsupported.
 - Runs outside the workspace prevent baseline contamination, not same-user
   access.
 - Commands receive a safe base environment plus explicitly approved names.

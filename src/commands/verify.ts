@@ -1,9 +1,9 @@
 import { runBaseline } from "../checks";
-import { deriveOutcome } from "../core/outcome";
+import { checkIds, deriveOutcome } from "../core/outcome";
 import { renderReport } from "../core/report";
 import {
-  readRunRecord,
-  runDirectory,
+  withVerificationLock,
+  runRecordSchema,
   writeArtifact,
   writeEvidence,
   writeRunRecord,
@@ -11,51 +11,91 @@ import {
 import { readDiff } from "../util/git";
 
 export type VerifyOptions = { run: string; quiet: boolean };
+export type VerifyDependencies = { runBaseline: typeof runBaseline; readDiff: typeof readDiff };
 
-export async function verify(options: VerifyOptions) {
-  const record = await readRunRecord(options.run);
-  const startedAt = new Date().toISOString();
-  const report = options.quiet ? () => {} : (line: string) => process.stderr.write(`  ${line}\n`);
+const defaultDependencies: VerifyDependencies = { runBaseline, readDiff };
 
-  const baseline = await runBaseline(record.manifest, record.workspace, report);
+export async function verify(
+  options: VerifyOptions,
+  dependencies: VerifyDependencies = defaultDependencies,
+) {
+  return withVerificationLock(options.run, async (location, record, session) => {
+    const startedAt = new Date().toISOString();
+    const report = options.quiet ? () => {} : (line: string) => process.stderr.write(`  ${line}\n`);
 
-  for (const item of baseline.evidence) {
-    await writeEvidence(record.runId, item.id, item.content);
-  }
-  if (record.baselineRevision) {
-    await writeEvidence(
-      record.runId,
-      "source-diff",
-      await readDiff(record.workspace, record.baselineRevision),
+    const baseline = await dependencies.runBaseline(record.manifest, record.workspace, report);
+
+    const evidenceIds = baseline.evidence.map((item) => item.id);
+    if (new Set(evidenceIds).size !== evidenceIds.length) {
+      throw new Error("Baseline produced duplicate evidence identifiers.");
+    }
+    const emittedEvidence = new Set(evidenceIds);
+    for (const check of baseline.results) {
+      for (const evidenceId of check.evidenceIds) {
+        if (!emittedEvidence.has(evidenceId)) {
+          throw new Error(
+            `Check ${check.id} references evidence ${evidenceId} that this verification did not emit.`,
+          );
+        }
+      }
+    }
+    for (const item of baseline.evidence) {
+      await writeEvidence(location, item.id, item.content, session);
+    }
+    if (record.baselineRevision) {
+      await writeEvidence(
+        location,
+        "source-diff",
+        await dependencies.readDiff(record.workspace, record.baselineRevision),
+        session,
+      );
+    }
+
+    const omittedIds = new Set(baseline.omittedChecks.map((entry) => entry.id));
+    const applicableChecks = checkIds.filter((id) => !omittedIds.has(id));
+    const outcome = deriveOutcome(baseline.results, applicableChecks);
+    const verifiedRecord = runRecordSchema.parse({
+      ...record,
+      status: "verified" as const,
+      verification: {
+        startedAt,
+        completedAt: new Date().toISOString(),
+        outcome,
+        results: baseline.results,
+        omittedChecks: baseline.omittedChecks,
+        ungradedObservations: baseline.ungradedObservations,
+      },
+    });
+    if (verifiedRecord.status !== "verified") {
+      throw new Error("Verification did not produce a verified run record.");
+    }
+    const verified = verifiedRecord;
+
+    const markdown = renderReport(verified);
+    await writeArtifact(location, "AX.md", markdown, session);
+    await writeArtifact(
+      location,
+      "results.json",
+      `${JSON.stringify(
+        {
+          runId: verified.runId,
+          outcome: verified.verification.outcome,
+          results: verified.verification.results,
+          omittedChecks: verified.verification.omittedChecks,
+        },
+        null,
+        2,
+      )}\n`,
+      session,
     );
-  }
+    await writeRunRecord(location, verified, session);
 
-  const outcome = deriveOutcome(baseline.results);
-  const verified = {
-    ...record,
-    status: "verified" as const,
-    verification: {
-      startedAt,
-      completedAt: new Date().toISOString(),
+    return {
+      runId: record.runId,
       outcome,
       results: baseline.results,
-    },
-  };
-
-  await writeRunRecord(verified);
-  const markdown = renderReport(verified);
-  await writeArtifact(record.runId, "AX.md", markdown);
-  await writeArtifact(
-    record.runId,
-    "results.json",
-    `${JSON.stringify({ runId: record.runId, outcome, results: baseline.results }, null, 2)}\n`,
-  );
-
-  return {
-    runId: record.runId,
-    outcome,
-    results: baseline.results,
-    directory: runDirectory(record.runId),
-    markdown,
-  };
+      directory: location.directory,
+      markdown,
+    };
+  });
 }

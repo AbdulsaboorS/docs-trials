@@ -52,6 +52,14 @@ export async function terminateProcessTree(child: ChildProcess): Promise<boolean
 
 const tracked = new Set<ChildProcess>();
 let handlersInstalled = false;
+let interruptCleanup: Promise<void> | undefined;
+
+function handleInterrupt(): void {
+  if (interruptCleanup) return;
+  interruptCleanup = Promise.allSettled([...tracked].map(terminateProcessTree)).then(() => {
+    process.exit(130);
+  });
+}
 
 /**
  * Tracks a child so an interrupt cannot leave a preview server holding the
@@ -64,10 +72,6 @@ export function trackChild(child: ChildProcess): void {
   if (handlersInstalled) return;
   handlersInstalled = true;
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-    process.once(signal, () => {
-      void Promise.all([...tracked].map(terminateProcessTree)).finally(() => {
-        process.exit(130);
-      });
-    });
+    process.on(signal, handleInterrupt);
   }
 }

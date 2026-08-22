@@ -10,11 +10,22 @@ describe("redact", () => {
   it("masks assigned secret values but keeps the key", () => {
     expect(redact(`apiKey: "${stripeKey}"`)).toBe('apiKey: "[REDACTED]"');
     expect(redact("password = 'hunter2'")).toBe("password = '[REDACTED]'");
+    expect(redact("token=plain-text-secret")).toBe("token=[REDACTED]");
+    expect(redact("password=hunter2")).toBe("password=[REDACTED]");
+    expect(redact("log: token=plain-text-secret")).toBe("log: token=[REDACTED]");
+    expect(redact("$ curl --password=hunter2 https://example.test")).toBe(
+      "$ curl --password=[REDACTED] https://example.test",
+    );
+    expect(redact("prefix password=hunter2 suffix")).toBe("prefix password=[REDACTED] suffix");
   });
 
   it("does not corrupt ordinary source that mentions a secret word", () => {
     // The previous implementation rewrote this to `const [REDACTED];`.
     expect(redact("const token = useToken();")).toBe("const token = useToken();");
+    expect(redact("authorization = await canAccess(user)")).toBe(
+      "authorization = await canAccess(user)",
+    );
+    expect(redact("authorization = new Header(value)")).toBe("authorization = new Header(value)");
     expect(redact("function readPassword(input) { return input; }")).toBe(
       "function readPassword(input) { return input; }",
     );
@@ -28,6 +39,36 @@ describe("redact", () => {
     );
     expect(redact("-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----")).toBe(
       "[REDACTED PRIVATE KEY]",
+    );
+  });
+
+  it("masks complete authorization credentials without corrupting source", () => {
+    const input = [
+      "Authorization: Basic dXNlcjpwYXNzd29yZA==",
+      "Authorization: Bearer abcdefghijklmnop",
+      "const authorization = canAccess(user);",
+    ].join("\n");
+
+    expect(redact(input)).toBe(
+      [
+        "Authorization: [REDACTED]",
+        "Authorization: [REDACTED]",
+        "const authorization = canAccess(user);",
+      ].join("\n"),
+    );
+  });
+
+  it("masks authorization credentials in common log and object forms", () => {
+    expect(redact("Authorization=Basic dXNlcjpwYXNzd29yZA==")).toBe("Authorization=[REDACTED]");
+    expect(redact("curl: > Authorization: Basic dXNlcjpwYXNzd29yZA==")).toBe(
+      "curl: > Authorization: [REDACTED]",
+    );
+    expect(redact('headers: { Authorization: "Basic dXNlcjpwYXNzd29yZA==" }')).toBe(
+      'headers: { Authorization: "[REDACTED]" }',
+    );
+    expect(redact("Authorization: ApiKey abcdefghijklmnop")).toBe("Authorization: [REDACTED]");
+    expect(redact('Authorization: Digest username="user", response="secret"')).toBe(
+      "Authorization: [REDACTED]",
     );
   });
 

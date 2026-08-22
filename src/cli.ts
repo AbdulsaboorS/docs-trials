@@ -6,7 +6,7 @@ import { init } from "./commands/init";
 import { prepare } from "./commands/prepare";
 import { verify } from "./commands/verify";
 import { countByOutcome, type Outcome } from "./core/outcome";
-import { latestRunId, readRunRecord, resolveRunDirectory } from "./core/run";
+import { latestRunId, loadRun } from "./core/run";
 
 const usage = `docs-trials — check whether an agent can build from your documentation
 
@@ -81,7 +81,7 @@ async function main(argv: string[]): Promise<number> {
       process.stdout.write(
         [
           "",
-          `${outcome.outcome.toUpperCase()} — ${totals.passed} passed, ${totals.failed} failed, ${totals.inconclusive} inconclusive`,
+          `BASELINE ${outcome.outcome.toUpperCase()} — ${totals.passed} passed, ${totals.failed} failed, ${totals.inconclusive} inconclusive`,
           "",
           ...outcome.results.map(
             (entry) => `  ${label(entry.outcome)}  ${entry.title}\n        ${entry.detail}`,
@@ -96,12 +96,11 @@ async function main(argv: string[]): Promise<number> {
 
     case "show": {
       const target = args.positional[0] ?? "latest";
-      const directory = await resolveRunDirectory(target);
-      const record = await readRunRecord(target);
-      if (!record.verification) {
+      const { location, record } = await loadRun(target);
+      if (record.status !== "verified") {
         throw new Error(`Run ${record.runId} has not been verified. Run \`docs-trials verify\`.`);
       }
-      process.stdout.write(await readFile(`${directory}/AX.md`, "utf8"));
+      process.stdout.write(await readFile(`${location.directory}/AX.md`, "utf8"));
       return exitCodes[record.verification.outcome];
     }
 

@@ -15,6 +15,7 @@ describe("manifestSchema", () => {
     const manifest = manifestSchema.parse(base);
     expect(manifest.run.install).toBe("npm install");
     expect(manifest.run.url).toBe("http://127.0.0.1:5173");
+    expect(manifest.run.observationWindowSeconds).toBe(5);
     expect(manifest.goals).toEqual([]);
   });
 

@@ -15,7 +15,9 @@ export const checkIds = [
   "build",
   "boot",
   "page-load",
+  "visible-content",
   "console-errors",
+  "resource-loads",
   "server-errors",
   "client-secrets",
   "network-egress",
@@ -30,9 +32,11 @@ export const checkTitles = {
   build: "The project builds successfully.",
   boot: "The application starts and answers an HTTP request.",
   "page-load": "The entry page loads without an HTTP or navigation error.",
-  "console-errors": "The page raises no uncaught error or console error.",
+  "visible-content": "The page renders visible content.",
+  "console-errors": "No uncaught or application console error occurs.",
+  "resource-loads": "Same-origin browser assets load successfully.",
   "server-errors": "No request returns a 5xx response.",
-  "client-secrets": "No credential-shaped value appears in browser-delivered assets.",
+  "client-secrets": "Captured same-origin browser content contains no detected secret.",
   "network-egress": "The page contacts no unexpected external origin.",
 } satisfies Record<CheckId, string>;
 
@@ -47,7 +51,23 @@ export const checkResultSchema = z
     detail: z.string().min(1),
     evidenceIds: z.array(z.string().min(1)),
   })
-  .strict();
+  .strict()
+  .superRefine((entry, context) => {
+    if (entry.title !== checkTitles[entry.id]) {
+      context.addIssue({
+        code: "custom",
+        path: ["title"],
+        message: `Expected the fixed title for ${entry.id}.`,
+      });
+    }
+    if (new Set(entry.evidenceIds).size !== entry.evidenceIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidenceIds"],
+        message: "Evidence references must be unique.",
+      });
+    }
+  });
 
 export type CheckResult = z.infer<typeof checkResultSchema>;
 
@@ -67,13 +87,20 @@ export function result(
  * An inconclusive run is not a documentation finding. It means Docs Trials
  * could not observe enough to decide.
  */
-export function deriveOutcome(results: readonly CheckResult[]): Outcome {
+export function deriveOutcome(
+  results: readonly CheckResult[],
+  applicableChecks: readonly CheckId[] = checkIds,
+): Outcome {
   if (results.length === 0) return "inconclusive";
   if (results.some((entry) => entry.outcome === "failed")) return "failed";
   const seen = new Set(results.map((entry) => entry.id));
-  const complete = checkIds.every((id) => seen.has(id));
+  const applicable = new Set(applicableChecks);
+  const complete = applicableChecks.every((id) => seen.has(id));
+  const containsOnlyApplicableChecks = results.every((entry) => applicable.has(entry.id));
   const allPassed = results.every((entry) => entry.outcome === "passed");
-  return complete && allPassed && seen.size === results.length ? "passed" : "inconclusive";
+  return complete && containsOnlyApplicableChecks && allPassed && seen.size === results.length
+    ? "passed"
+    : "inconclusive";
 }
 
 export function countByOutcome(results: readonly CheckResult[]): Record<Outcome, number> {

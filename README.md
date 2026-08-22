@@ -12,7 +12,7 @@ It runs on your machine. Nothing is uploaded.
 A build that exits `0` proves very little. Here is a real run against the
 [TanStack Query quick start](https://tanstack.com/query/latest/docs/framework/react/quick-start).
 The last line of that page is `render(<App />, document.getElementById('root'))`,
-which is the React 17 API. An agent that follows the page literally produces this:
+which is the React 17 API. An earlier eight-check trial observed this:
 
 ```txt
 FAILED — 7 passed, 1 failed, 0 inconclusive
@@ -66,7 +66,8 @@ when the result is inconclusive. That makes it usable in CI.
     "install": "npm install",
     "build": "npm run build",
     "start": "npm run dev -- --port 5173 --strictPort",
-    "url": "http://127.0.0.1:5173"
+    "url": "http://127.0.0.1:5173",
+    "observationWindowSeconds": 5
   },
   "allowedOrigins": ["https://api.example.com"]
 }
@@ -77,20 +78,26 @@ produce a result.
 
 ## What is checked
 
-| Check              | Passes when                                                                     |
-| ------------------ | ------------------------------------------------------------------------------- |
-| install            | The install command exits `0`.                                                  |
-| build              | The build command exits `0`.                                                    |
-| boot               | The start command brings up a server that answers an HTTP request.              |
-| page load          | The entry page navigates and returns a status below 400.                        |
-| application errors | No uncaught exception and no `console.error`.                                   |
-| server errors      | No response returns a 5xx status.                                               |
-| client secrets     | No issuer-prefixed credential, JWT, or private key in browser-delivered assets. |
-| network egress     | Every external origin the page contacts is declared in `allowedOrigins`.        |
+| Check              | Passes when                                                              |
+| ------------------ | ------------------------------------------------------------------------ |
+| install            | The install command exits `0`.                                           |
+| build              | The build command exits `0`.                                             |
+| boot               | The start command brings up a server that answers an HTTP request.       |
+| page load          | The entry page navigates and returns a status below 400.                 |
+| visible content    | The page renders text or a meaningful visual surface.                    |
+| application errors | No uncaught exception and no application `console.error`.                |
+| resource loads     | Same-origin browser assets load without an HTTP or network failure.      |
+| server errors      | No response returns a 5xx status.                                        |
+| client secrets     | Complete same-origin response bodies contain no detected credential.     |
+| network egress     | Every external origin the page contacts is declared in `allowedOrigins`. |
 
 These are generic. They need no per-task authoring and work on any web
-application. They test that the integration installs, builds, boots, loads, and
-does not leak credentials to the browser.
+application. They test that the integration installs, builds, boots, renders,
+loads browser assets, and does not leak detected credentials in
+same-origin responses. Fetch and XHR failures are not graded as browser asset
+failures. The browser observes the page for the period frozen in the manifest.
+When no build command is declared, the build check is listed as omitted and
+receives no outcome.
 
 **They do not test whether the application fulfils your task.** Docs Trials
 will not claim otherwise.
@@ -123,7 +130,9 @@ evidence/source-diff.txt what the agent changed, against the Git baseline
 
 Runs are stored outside your workspace so Docs Trials does not dirty the Git
 baseline it records. This does not isolate runs from processes that use your
-operating-system account. Evidence is redacted before it is written.
+operating-system account. Attempt immutability prevents later CLI writes; it
+does not authenticate files against same-user tampering. Evidence is redacted
+before it is written.
 
 ## Limits
 
@@ -141,6 +150,8 @@ Read these before you trust a result.
   not that it does what you asked.
 - **Commands run on your host.** `install`, `build`, and `start` are not
   sandboxed. Use a disposable workspace and remove provider credentials.
+- **Lifecycle commands must stay in the foreground.** Detached daemons and
+  containers can outlive verification because v0 has no process isolation.
 
 ## Status
 

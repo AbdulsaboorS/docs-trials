@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
-import { docLabel, loadManifest, type Manifest } from "../core/manifest";
+import { docLabel, inlineText, loadManifest, type Manifest } from "../core/manifest";
 import {
-  createRunId,
-  runDirectory,
+  removeRunReservation,
+  reserveRunDirectory,
   writeArtifact,
   writeRunRecord,
   type RunRecord,
@@ -14,7 +14,9 @@ export type PrepareOptions = { manifest: string; workspace: string };
 export async function prepare(options: PrepareOptions) {
   const workspace = resolve(options.workspace);
   const { manifest, digest } = await loadManifest(options.manifest);
-  const runId = createRunId(manifest.id);
+  const preparedAt = new Date();
+  const location = await reserveRunDirectory(manifest.id, preparedAt);
+  const { runId } = location;
   const baseline = await readBaseline(workspace);
   const instructions = renderInstructions(manifest);
 
@@ -24,15 +26,21 @@ export async function prepare(options: PrepareOptions) {
     manifest,
     manifestDigest: digest,
     workspace,
-    preparedAt: new Date().toISOString(),
+    preparedAt: preparedAt.toISOString(),
   };
   if (baseline) record.baselineRevision = baseline.revision;
-  await writeRunRecord(record);
-  const instructionsPath = await writeArtifact(runId, "AGENT_INSTRUCTIONS.md", instructions);
+  let instructionsPath: string;
+  try {
+    instructionsPath = await writeArtifact(location, "AGENT_INSTRUCTIONS.md", instructions);
+    await writeRunRecord(location, record);
+  } catch (error) {
+    await removeRunReservation(location);
+    throw error;
+  }
 
   return {
     runId,
-    runDirectory: runDirectory(runId),
+    runDirectory: location.directory,
     instructionsPath,
     instructions,
     baseline,
@@ -55,7 +63,13 @@ function renderInstructions(manifest: Manifest): string {
     "",
     "## Documentation you may use",
     "",
-    ...manifest.docs.map((doc) => `- ${docLabel(doc)}`),
+    ...manifest.docs.flatMap((doc, index) => {
+      const inline = inlineText(doc);
+      const separator = index === 0 ? [] : [""];
+      return inline
+        ? [...separator, `### ${inline.label}`, "", inline.text]
+        : [...separator, `- ${docLabel(doc)}`];
+    }),
     "",
     "## Rules",
     "",

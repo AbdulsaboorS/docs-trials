@@ -17,6 +17,7 @@ const template = (id: string) => ({
     build: "npm run build",
     start: "npm run dev -- --port 5173",
     url: "http://127.0.0.1:5173",
+    observationWindowSeconds: 5,
   },
   allowedOrigins: [],
   agent: { name: "your coding agent" },
