@@ -3,6 +3,7 @@ import { manifestSchema } from "../src/core/manifest";
 import { checkIds, result, type CheckResult } from "../src/core/outcome";
 import { renderReport } from "../src/core/report";
 import type { RunRecord } from "../src/core/run";
+import { currentRunMetadata } from "../src/core/run";
 
 const manifest = manifestSchema.parse({
   version: 1,
@@ -25,7 +26,42 @@ function record(
     manifestDigest: "a".repeat(64),
     workspace: "/tmp/ws",
     preparedAt: "2026-08-04T12:00:00.000Z",
+    preparation: {
+      ...currentRunMetadata(),
+      cliVersion: "prepare-cli",
+      runtime: {
+        nodeVersion: "v22.1.0",
+        platform: "darwin",
+        release: "prepare-release",
+        arch: "arm64",
+      },
+    },
+    documentation: [
+      {
+        status: "frozen",
+        sourceType: "url",
+        label: "https://example.com/docs",
+        sourceUrl: "https://example.com/docs",
+        finalUrl: "https://example.com/reference",
+        retrievedAt: "2026-08-04T12:00:00.000Z",
+        httpStatus: 200,
+        contentType: "text/html",
+        sha256: "b".repeat(64),
+        byteLength: 123,
+        file: "documentation/001-https-example-com-docs.txt",
+      },
+    ],
     verification: {
+      verifier: {
+        ...currentRunMetadata(),
+        cliVersion: "verify-cli",
+        runtime: {
+          nodeVersion: "v24.2.0",
+          platform: "linux",
+          release: "verify-release",
+          arch: "x64",
+        },
+      },
       startedAt: "2026-08-04T12:00:00.000Z",
       completedAt: "2026-08-04T12:01:30.000Z",
       outcome,
@@ -64,6 +100,40 @@ describe("renderReport", () => {
     expect(markdown).toContain("Author goals — not verified");
     expect(markdown).toContain("A customer can complete a payment.");
     expect(markdown).toContain("did **not** check any of them");
+  });
+
+  it("reports runtime and frozen documentation provenance", () => {
+    const markdown = renderReport(record([result("install", "passed", "ok")], "inconclusive"));
+
+    expect(markdown).toContain("Verifier: Docs Trials verify-cli (schema 1)");
+    expect(markdown).toContain("v24.2.0 on linux verify-release (x64)");
+    expect(markdown).toContain("Prepared with: Docs Trials prepare-cli (schema 1)");
+    expect(markdown).toContain("v22.1.0 on darwin prepare-release (arm64)");
+    expect(markdown).toContain("[frozen copy](documentation/001-https-example-com-docs.txt)");
+    expect(markdown).toContain("source https://example.com/docs");
+    expect(markdown).toContain(`SHA-256 \`${"b".repeat(64)}\``);
+    expect(markdown).toContain("final URL https://example.com/reference");
+  });
+
+  it("reports incomplete snapshots as live documentation", () => {
+    const base = record([result("install", "passed", "ok")], "inconclusive");
+    const markdown = renderReport({
+      ...base,
+      documentation: [
+        {
+          status: "live",
+          sourceType: "url",
+          label: "Docs",
+          sourceUrl: "https://example.com/docs",
+          retrievedAt: "2026-08-04T12:00:00.000Z",
+          error: "Documentation retrieval timed out.",
+        },
+      ],
+    });
+
+    expect(markdown).toContain("live source https://example.com/docs");
+    expect(markdown).toContain("Snapshot incomplete: Documentation retrieval timed out.");
+    expect(markdown).toContain("Attempted 2026-08-04T12:00:00.000Z.");
   });
 
   it("never presents a goal as a passing check", () => {
@@ -143,6 +213,8 @@ describe("renderReport", () => {
       manifestDigest: verified.manifestDigest,
       workspace: verified.workspace,
       preparedAt: verified.preparedAt,
+      preparation: verified.preparation,
+      documentation: verified.documentation,
     };
     expect(() => renderReport(unverified)).toThrow(/before verification/);
   });

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { digestDocumentation, maximumDocumentationBytes } from "../src/core/documentation";
 import { digestManifest, manifestSchema } from "../src/core/manifest";
 import { result } from "../src/core/outcome";
 import {
@@ -11,6 +12,8 @@ import {
   reserveRunDirectory,
   withVerificationLock,
   writeArtifact,
+  currentRunMetadata,
+  writeDocumentationSnapshot,
   writeEvidence,
   writeRunRecord,
   type RunLocation,
@@ -27,7 +30,10 @@ type RawRunRecord = {
   workspace: string;
   preparedAt: string;
   baselineRevision?: string | undefined;
+  preparation: RunRecord["preparation"];
+  documentation: RunRecord["documentation"];
   verification?: {
+    verifier?: RunRecord["preparation"];
     startedAt: string;
     completedAt: string;
     outcome: string;
@@ -68,6 +74,17 @@ function record(runId: string, manifestId: string, preparedAt: string): RunRecor
     manifestDigest: digestManifest(manifest),
     workspace: "/tmp/workspace",
     preparedAt,
+    preparation: currentRunMetadata(),
+    documentation: [
+      {
+        status: "live",
+        sourceType: "url",
+        label: "https://example.com/docs",
+        sourceUrl: "https://example.com/docs",
+        retrievedAt: preparedAt,
+        error: "Test fixture did not retrieve documentation.",
+      },
+    ],
   };
 }
 
@@ -101,6 +118,97 @@ describe("run records", () => {
     await writeFile(path, raw.replace("Build something.", "Build something else."));
 
     await expect(readRunRecord(expected.runId)).rejects.toThrow(/manifest digest does not match/i);
+  });
+
+  it("rejects changed and unsafe documentation snapshots", async () => {
+    const expected = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
+    const location = await reserveRunDirectory("sample", new Date(expected.preparedAt));
+    expected.runId = location.runId;
+    const content = new TextEncoder().encode("Frozen documentation");
+    const file = "documentation/001-example.txt";
+    expected.documentation = [
+      {
+        status: "frozen",
+        sourceType: "url",
+        label: "https://example.com/docs",
+        sourceUrl: "https://example.com/docs",
+        finalUrl: "https://example.com/docs",
+        retrievedAt: expected.preparedAt,
+        httpStatus: 200,
+        contentType: "text/plain",
+        sha256: digestDocumentation(content),
+        byteLength: content.byteLength,
+        file,
+      },
+    ];
+    await writeDocumentationSnapshot(location, file, content);
+    await writeRunRecord(location, expected);
+    await writeFile(join(location.directory, file), "Frozen documentatioN");
+
+    await expect(readRunRecord(location.runId)).rejects.toThrow(/snapshot digest does not match/i);
+    await expect(
+      writeDocumentationSnapshot(location, "documentation/../../outside.txt", content),
+    ).rejects.toThrow(/confined documentation snapshot path/i);
+  });
+
+  it("rejects a snapshot reached through a symlinked documentation directory", async () => {
+    const expected = record("sample-symlink", "sample", "2026-08-20T12:00:00.000Z");
+    const location = { runId: expected.runId, directory: join(home, expected.runId) };
+    const outside = await mkdtemp(join(tmpdir(), "docs-trials-documentation-"));
+    const content = new TextEncoder().encode("Outside documentation");
+    const file = "documentation/001-example.txt";
+    expected.documentation = [
+      {
+        status: "frozen",
+        sourceType: "url",
+        label: "https://example.com/docs",
+        sourceUrl: "https://example.com/docs",
+        finalUrl: "https://example.com/docs",
+        retrievedAt: expected.preparedAt,
+        httpStatus: 200,
+        contentType: "text/plain",
+        sha256: digestDocumentation(content),
+        byteLength: content.byteLength,
+        file,
+      },
+    ];
+    await mkdir(location.directory);
+    await writeFile(join(outside, "001-example.txt"), content);
+    await symlink(outside, join(location.directory, "documentation"));
+    await writeFile(join(location.directory, "run.json"), `${JSON.stringify(expected)}\n`);
+    try {
+      await expect(readRunRecord(location.runId)).rejects.toThrow(/not confined/i);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("stops digest validation when a snapshot exceeds the byte limit", async () => {
+    const expected = record("sample-oversized", "sample", "2026-08-20T12:00:00.000Z");
+    const location = { runId: expected.runId, directory: join(home, expected.runId) };
+    const content = new TextEncoder().encode("Original");
+    const file = "documentation/001-example.txt";
+    expected.documentation = [
+      {
+        status: "frozen",
+        sourceType: "url",
+        label: "https://example.com/docs",
+        sourceUrl: "https://example.com/docs",
+        finalUrl: "https://example.com/docs",
+        retrievedAt: expected.preparedAt,
+        httpStatus: 200,
+        contentType: "text/plain",
+        sha256: digestDocumentation(content),
+        byteLength: content.byteLength,
+        file,
+      },
+    ];
+    await mkdir(location.directory);
+    await writeDocumentationSnapshot(location, file, content);
+    await writeRunRecord(location, expected);
+    await writeFile(join(location.directory, file), new Uint8Array(maximumDocumentationBytes + 1));
+
+    await expect(readRunRecord(location.runId)).rejects.toThrow(/snapshot exceeds.*byte limit/i);
   });
 
   it("selects the newest preparation across different manifest ids", async () => {
@@ -227,6 +335,7 @@ describe("run records", () => {
   it("rejects inconsistent verification outcomes, duplicate checks, and changed titles", async () => {
     const base = record("sample-20260820-120000", "sample", "2026-08-20T12:00:00.000Z");
     const verification = {
+      verifier: currentRunMetadata(),
       startedAt: "2026-08-20T12:01:00.000Z",
       completedAt: "2026-08-20T12:02:00.000Z",
       outcome: "inconclusive",
@@ -271,6 +380,7 @@ describe("run records", () => {
       ...base,
       runId: "sample-prepared-extra",
       verification: {
+        verifier: currentRunMetadata(),
         startedAt: "2026-08-20T12:01:00.000Z",
         completedAt: "2026-08-20T12:02:00.000Z",
         outcome: "inconclusive",
@@ -287,6 +397,7 @@ describe("run records", () => {
       runId: "sample-missing-evidence",
       status: "verified",
       verification: {
+        verifier: currentRunMetadata(),
         startedAt: "2026-08-20T12:01:00.000Z",
         completedAt: "2026-08-20T12:02:00.000Z",
         outcome: "inconclusive",
@@ -304,6 +415,7 @@ describe("run records", () => {
       runId: "sample-forged-omissions",
       status: "verified",
       verification: {
+        verifier: currentRunMetadata(),
         startedAt: "2026-08-20T12:01:00.000Z",
         completedAt: "2026-08-20T12:02:00.000Z",
         outcome: "passed",
@@ -392,6 +504,7 @@ describe("verification locks", () => {
         ...prepared,
         status: "verified",
         verification: {
+          verifier: currentRunMetadata(),
           startedAt: "2026-08-20T12:01:00.000Z",
           completedAt: "2026-08-20T12:02:00.000Z",
           outcome: "inconclusive",

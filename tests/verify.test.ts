@@ -9,6 +9,7 @@ import { checkIds, result } from "../src/core/outcome";
 import {
   readRunRecord,
   reserveRunDirectory,
+  currentRunMetadata,
   writeArtifact,
   writeEvidence,
   writeRunRecord,
@@ -18,7 +19,22 @@ import {
 let home: string;
 const runBaselineMock = vi.fn<VerifyDependencies["runBaseline"]>();
 const readDiffMock = vi.fn<VerifyDependencies["readDiff"]>();
-const dependencies: VerifyDependencies = { runBaseline: runBaselineMock, readDiff: readDiffMock };
+const verifierMetadata = {
+  cliVersion: "verify-cli",
+  schemaVersion: 1 as const,
+  runtime: {
+    nodeVersion: "v24.2.0",
+    platform: "linux",
+    release: "verify-release",
+    arch: "x64",
+  },
+};
+const dependencies: VerifyDependencies = {
+  runBaseline: runBaselineMock,
+  readDiff: readDiffMock,
+  metadata: () => verifierMetadata,
+  now: () => new Date(),
+};
 
 beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), "docs-trials-verify-"));
@@ -52,6 +68,17 @@ async function preparedRun(): Promise<RunLocation> {
     manifestDigest: digestManifest(manifest),
     workspace: "/tmp/workspace",
     preparedAt: preparedAt.toISOString(),
+    preparation: currentRunMetadata(),
+    documentation: [
+      {
+        status: "live",
+        sourceType: "url",
+        label: "https://example.com/docs",
+        sourceUrl: "https://example.com/docs",
+        retrievedAt: preparedAt.toISOString(),
+        error: "Test fixture did not retrieve documentation.",
+      },
+    ],
   });
   return location;
 }
@@ -74,6 +101,21 @@ function evidenceForCheck(id: (typeof checkIds)[number]): string {
 }
 
 describe("verify", () => {
+  it("records verifier metadata separately from preparation metadata", async () => {
+    const location = await preparedRun();
+    const prepared = await readRunRecord(location.runId);
+
+    const result = await verify({ run: location.runId, quiet: true }, dependencies);
+    const verified = await readRunRecord(location.runId);
+
+    expect(verified).toMatchObject({
+      preparation: prepared.preparation,
+      verification: { verifier: verifierMetadata },
+    });
+    expect(result.markdown).toContain("Verifier: Docs Trials verify-cli (schema 1)");
+    expect(result.markdown).toContain("Prepared with: Docs Trials 0.1.0 (schema 1)");
+  });
+
   it("allows only one concurrent verifier to execute the baseline", async () => {
     const location = await preparedRun();
     let release!: () => void;

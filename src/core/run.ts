@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
   lstat,
   link,
@@ -11,10 +12,15 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { homedir } from "node:os";
+import { arch, homedir, platform, release } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
-import { digestManifest, manifestSchema } from "./manifest";
+import {
+  documentationFileSchema,
+  documentationProvenanceSchema,
+  maximumDocumentationBytes,
+} from "./documentation";
+import { digestManifest, inlineText, manifestSchema, urlDocument } from "./manifest";
 import {
   checkIdSchema,
   checkIds,
@@ -24,6 +30,7 @@ import {
   type CheckId,
 } from "./outcome";
 import { redact } from "./redact";
+import { cliVersion, schemaVersion } from "./version";
 
 /**
  * Runs live outside the workspace the agent is working in.
@@ -52,6 +59,20 @@ const evidenceIdSchema = z
 
 const artifactNameSchema = z.enum(["AGENT_INSTRUCTIONS.md", "AX.md", "results.json"]);
 const fileSystemErrorSchema = z.object({ code: z.string() }).loose();
+const executionMetadataSchema = z
+  .object({
+    cliVersion: z.string().min(1),
+    schemaVersion: z.literal(schemaVersion),
+    runtime: z
+      .object({
+        nodeVersion: z.string().min(1),
+        platform: z.string().min(1),
+        release: z.string().min(1),
+        arch: z.string().min(1),
+      })
+      .strict(),
+  })
+  .strict();
 
 const baseRunRecordSchema = z
   .object({
@@ -59,6 +80,8 @@ const baseRunRecordSchema = z
     manifest: manifestSchema,
     manifestDigest: z.string().regex(/^[a-f0-9]{64}$/),
     workspace: z.string().min(1),
+    preparation: executionMetadataSchema,
+    documentation: z.array(documentationProvenanceSchema),
     baselineRevision: z
       .string()
       .regex(/^[a-f0-9]{7,64}$/)
@@ -69,6 +92,7 @@ const baseRunRecordSchema = z
 
 const verificationSchema = z
   .object({
+    verifier: executionMetadataSchema,
     startedAt: z.iso.datetime(),
     completedAt: z.iso.datetime(),
     outcome: outcomeSchema,
@@ -144,6 +168,43 @@ export const runRecordSchema = z
         message: "Run identifier does not match the manifest identifier.",
       });
     }
+    if (record.documentation.length !== record.manifest.docs.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["documentation"],
+        message: "Documentation provenance must match every manifest document.",
+      });
+    }
+    const files = record.documentation.flatMap((entry) =>
+      entry.status === "frozen" ? [entry.file] : [],
+    );
+    if (new Set(files).size !== files.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["documentation"],
+        message: "Documentation snapshot files must be unique.",
+      });
+    }
+    for (const [index, entry] of record.documentation.entries()) {
+      const doc = record.manifest.docs[index];
+      if (doc === undefined) continue;
+      const inline = inlineText(doc);
+      const url = urlDocument(doc);
+      const expectedType = inline ? "inline" : "url";
+      const expectedLabel = inline?.label ?? url?.label;
+      const expectedUrl = url?.url;
+      if (
+        entry.sourceType !== expectedType ||
+        entry.label !== expectedLabel ||
+        (entry.sourceType === "url" && entry.sourceUrl !== expectedUrl)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["documentation", index],
+          message: "Documentation provenance does not match the manifest source.",
+        });
+      }
+    }
     if (record.status === "verified") {
       const expectedOmissions: CheckId[] = record.manifest.run.build ? [] : ["build"];
       const actualOmissions = record.verification.omittedChecks.map((entry) => entry.id);
@@ -171,6 +232,7 @@ export const runRecordSchema = z
   });
 
 export type RunRecord = z.infer<typeof runRecordSchema>;
+export type ExecutionMetadata = z.infer<typeof executionMetadataSchema>;
 export type PreparedRunRecord = Extract<RunRecord, { status: "prepared" }>;
 export type RunLocation = Readonly<{ runId: string; directory: string }>;
 export type ArtifactName = "AGENT_INSTRUCTIONS.md" | "AX.md" | "results.json";
@@ -189,6 +251,19 @@ export function createRunId(manifestId: string, date = new Date()): string {
     .replace("Z", "")
     .replace("T", "-");
   return `${manifestRunPrefixSchema.parse(manifestId)}-${stamp}`;
+}
+
+export function currentRunMetadata(): ExecutionMetadata {
+  return {
+    cliVersion,
+    schemaVersion,
+    runtime: {
+      nodeVersion: process.version,
+      platform: platform(),
+      release: release(),
+      arch: arch(),
+    },
+  };
 }
 
 export async function reserveRunDirectory(
@@ -244,6 +319,7 @@ export async function writeRunRecord(
   if (digestManifest(parsed.manifest) !== parsed.manifestDigest) {
     throw new Error("Run record manifest does not match its stored digest.");
   }
+  await validateDocumentationSnapshots(location, parsed);
   const path = join(location.directory, "run.json");
   if (parsed.status === "prepared") {
     if (await pathExists(path)) throw new Error(`Run ${parsed.runId} already has a record.`);
@@ -305,6 +381,7 @@ async function readRunRecordAt(location: RunLocation): Promise<RunRecord> {
   if (digestManifest(record.manifest) !== record.manifestDigest) {
     throw new Error(`The manifest digest does not match the manifest in ${path}.`);
   }
+  await validateDocumentationSnapshots(location, record);
   if (record.runId !== location.runId) {
     throw new Error(`Invalid run record: ${path} declares run id ${record.runId}.`);
   }
@@ -409,6 +486,32 @@ export async function writeEvidence(
   });
 }
 
+export async function writeDocumentationSnapshot(
+  location: RunLocation,
+  relativeFile: string,
+  content: Uint8Array,
+): Promise<string> {
+  await assertLocationIdentity(location);
+  if (content.byteLength > maximumDocumentationBytes) {
+    throw new Error(`Documentation exceeds the ${maximumDocumentationBytes}-byte snapshot limit.`);
+  }
+  const safeFile = documentationFileSchema.parse(relativeFile);
+  const directory = join(location.directory, "documentation");
+  try {
+    await mkdir(directory, { mode: 0o700 });
+  } catch (error) {
+    const parsedError = fileSystemErrorSchema.safeParse(error);
+    if (!parsedError.success || parsedError.data.code !== "EEXIST") throw error;
+    const stats = await lstat(directory);
+    if (!stats.isDirectory() || stats.isSymbolicLink()) {
+      throw new Error(`Documentation path is not a real directory: ${directory}.`);
+    }
+  }
+  const path = join(location.directory, safeFile);
+  await exclusiveAtomicWriteFile(path, content);
+  return path;
+}
+
 export async function writeArtifact(
   location: RunLocation,
   name: ArtifactName,
@@ -485,9 +588,82 @@ async function validateEvidenceReferences(
   }
 }
 
+async function validateDocumentationSnapshots(
+  location: RunLocation,
+  record: RunRecord,
+): Promise<void> {
+  const documentationDirectory = join(location.directory, "documentation");
+  if (record.documentation.some((entry) => entry.status === "frozen")) {
+    const directoryStats = await lstat(documentationDirectory);
+    const [runReal, directoryReal] = await Promise.all([
+      realpath(location.directory),
+      realpath(documentationDirectory),
+    ]);
+    if (
+      !directoryStats.isDirectory() ||
+      directoryStats.isSymbolicLink() ||
+      dirname(directoryReal) !== runReal
+    ) {
+      throw new Error(`Documentation path is not confined to run ${record.runId}.`);
+    }
+  }
+  for (const entry of record.documentation) {
+    if (entry.status !== "frozen") continue;
+    const safeFile = documentationFileSchema.parse(entry.file);
+    const path = join(location.directory, safeFile);
+    let stats;
+    try {
+      stats = await lstat(path);
+    } catch (error) {
+      const parsedError = fileSystemErrorSchema.safeParse(error);
+      if (!parsedError.success || parsedError.data.code !== "ENOENT") throw error;
+      throw new Error(`Run ${record.runId} references missing documentation snapshot ${safeFile}.`);
+    }
+    if (!stats.isFile() || stats.isSymbolicLink()) {
+      throw new Error(`Run ${record.runId} references invalid documentation snapshot ${safeFile}.`);
+    }
+    const [directoryReal, fileReal] = await Promise.all([
+      realpath(documentationDirectory),
+      realpath(path),
+    ]);
+    if (dirname(fileReal) !== directoryReal) {
+      throw new Error(`Documentation snapshot must be confined to ${documentationDirectory}.`);
+    }
+    const observed = await digestDocumentationFile(path);
+    if (observed.byteLength !== entry.byteLength) {
+      throw new Error(`Documentation snapshot byte length does not match ${safeFile}.`);
+    }
+    if (observed.sha256 !== entry.sha256) {
+      throw new Error(`Documentation snapshot digest does not match ${safeFile}.`);
+    }
+  }
+}
+
+async function digestDocumentationFile(
+  path: string,
+): Promise<{ sha256: string; byteLength: number }> {
+  const hash = createHash("sha256");
+  const stream = createReadStream(path);
+  let byteLength = 0;
+  try {
+    for await (const chunk of stream) {
+      byteLength += chunk.byteLength;
+      if (byteLength > maximumDocumentationBytes) {
+        throw new Error(
+          `Documentation snapshot exceeds the ${maximumDocumentationBytes}-byte limit.`,
+        );
+      }
+      hash.update(chunk);
+    }
+  } finally {
+    stream.destroy();
+  }
+  return { sha256: hash.digest("hex"), byteLength };
+}
+
 async function atomicWriteFile(
   path: string,
-  content: string,
+  content: string | Uint8Array,
   beforeCommit: () => Promise<void> = async () => {},
 ): Promise<void> {
   const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
@@ -500,7 +676,7 @@ async function atomicWriteFile(
   }
 }
 
-async function exclusiveAtomicWriteFile(path: string, content: string): Promise<void> {
+async function exclusiveAtomicWriteFile(path: string, content: string | Uint8Array): Promise<void> {
   const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
   try {
     await writeFile(temporary, content, { flag: "wx", mode: 0o600 });

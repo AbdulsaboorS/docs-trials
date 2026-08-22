@@ -2,25 +2,37 @@ import { runBaseline } from "../checks";
 import { checkIds, deriveOutcome } from "../core/outcome";
 import { renderReport } from "../core/report";
 import {
+  currentRunMetadata,
   withVerificationLock,
   runRecordSchema,
   writeArtifact,
   writeEvidence,
   writeRunRecord,
+  type ExecutionMetadata,
 } from "../core/run";
 import { readDiff } from "../util/git";
 
 export type VerifyOptions = { run: string; quiet: boolean };
-export type VerifyDependencies = { runBaseline: typeof runBaseline; readDiff: typeof readDiff };
+export type VerifyDependencies = {
+  runBaseline: typeof runBaseline;
+  readDiff: typeof readDiff;
+  metadata: () => ExecutionMetadata;
+  now: () => Date;
+};
 
-const defaultDependencies: VerifyDependencies = { runBaseline, readDiff };
+const defaultDependencies: VerifyDependencies = {
+  runBaseline,
+  readDiff,
+  metadata: currentRunMetadata,
+  now: () => new Date(),
+};
 
 export async function verify(
   options: VerifyOptions,
   dependencies: VerifyDependencies = defaultDependencies,
 ) {
   return withVerificationLock(options.run, async (location, record, session) => {
-    const startedAt = new Date().toISOString();
+    const startedAt = dependencies.now().toISOString();
     const report = options.quiet ? () => {} : (line: string) => process.stderr.write(`  ${line}\n`);
 
     const baseline = await dependencies.runBaseline(record.manifest, record.workspace, report);
@@ -58,8 +70,9 @@ export async function verify(
       ...record,
       status: "verified" as const,
       verification: {
+        verifier: dependencies.metadata(),
         startedAt,
-        completedAt: new Date().toISOString(),
+        completedAt: dependencies.now().toISOString(),
         outcome,
         results: baseline.results,
         omittedChecks: baseline.omittedChecks,

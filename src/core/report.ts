@@ -1,4 +1,3 @@
-import { docLabel } from "./manifest";
 import { checkIds, checkTitles, countByOutcome, type CheckResult, type Outcome } from "./outcome";
 import type { RunRecord } from "./run";
 
@@ -39,6 +38,8 @@ export function renderReport(record: RunRecord): string {
     `- Checks: ${totals.passed} passed, ${totals.failed} failed, ${totals.inconclusive} inconclusive`,
     `- Verification time: ${formatDuration(durationMs)}`,
     `- Agent: ${record.manifest.agent ? `${record.manifest.agent.name}${record.manifest.agent.model ? ` (${record.manifest.agent.model})` : ""}` : "not declared"}`,
+    `- Verifier: Docs Trials ${verification.verifier.cliVersion} (schema ${verification.verifier.schemaVersion}); ${formatRuntime(verification.verifier.runtime)}`,
+    `- Prepared with: Docs Trials ${record.preparation.cliVersion} (schema ${record.preparation.schemaVersion}); ${formatRuntime(record.preparation.runtime)}`,
     `- Manifest digest: \`${record.manifestDigest.slice(0, 16)}\``,
     record.baselineRevision
       ? `- Baseline revision: \`${record.baselineRevision.slice(0, 12)}\``
@@ -50,7 +51,21 @@ export function renderReport(record: RunRecord): string {
     "",
     "## Documentation supplied",
     "",
-    ...record.manifest.docs.map((doc) => `- ${docLabel(doc)}`),
+    ...record.documentation.flatMap((doc) => {
+      if (doc.status === "live") {
+        return [
+          `- ${doc.label}: live source ${doc.sourceUrl}`,
+          `  Snapshot incomplete: ${doc.error}`,
+          `  Attempted ${doc.retrievedAt}${doc.finalUrl ? `; final URL ${doc.finalUrl}` : ""}${doc.httpStatus ? `; HTTP ${doc.httpStatus}` : ""}${doc.contentType ? `; ${doc.contentType}` : ""}.`,
+        ];
+      }
+      const attribution =
+        doc.sourceType === "inline" ? "inline trial text" : `source ${doc.sourceUrl}`;
+      return [
+        `- ${doc.label}: [frozen copy](${doc.file}) (${attribution})`,
+        `  Retrieved ${doc.retrievedAt}; ${doc.byteLength} bytes; ${doc.contentType}; SHA-256 \`${doc.sha256}\`${doc.httpStatus ? `; HTTP ${doc.httpStatus}` : ""}${doc.sourceType === "url" && doc.finalUrl !== doc.sourceUrl ? `; final URL ${doc.finalUrl}` : ""}.`,
+      ];
+    }),
     "",
     "## Baseline checks",
     "",
@@ -159,6 +174,10 @@ function formatDuration(milliseconds: number): string {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return "unknown";
   const seconds = Math.round(milliseconds / 1000);
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function formatRuntime(runtime: RunRecord["preparation"]["runtime"]): string {
+  return `${runtime.nodeVersion} on ${runtime.platform} ${runtime.release} (${runtime.arch})`;
 }
 
 function escapeCell(value: string): string {

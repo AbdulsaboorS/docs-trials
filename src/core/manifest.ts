@@ -2,8 +2,26 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 
-const docUrlSchema = z.url();
-const labeledUrlDocSchema = z.object({ label: z.string().min(1), url: z.url() }).strict();
+const sensitiveUrlParameters = new Set([
+  "accesstoken",
+  "apikey",
+  "auth",
+  "authorization",
+  "credential",
+  "key",
+  "password",
+  "secret",
+  "sig",
+  "signature",
+  "token",
+]);
+const documentationUrlSchema = z
+  .url()
+  .refine(isSafeDocumentationUrl, "Documentation URLs must not contain credentials or secrets.");
+const docUrlSchema = documentationUrlSchema;
+const labeledUrlDocSchema = z
+  .object({ label: z.string().min(1), url: documentationUrlSchema })
+  .strict();
 const inlineTextDocSchema = z
   .object({ label: z.string().min(1), text: z.string().min(1) })
   .strict();
@@ -22,7 +40,10 @@ export const manifestSchema = z
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "Use lowercase letters, digits, and hyphens."),
     title: z.string().min(1),
     task: z.string().min(1),
-    docs: z.array(z.union([docUrlSchema, labeledUrlDocSchema, inlineTextDocSchema])).min(1),
+    docs: z
+      .array(z.union([docUrlSchema, labeledUrlDocSchema, inlineTextDocSchema]))
+      .min(1)
+      .max(999),
     goals: z.array(z.string().min(1)).default([]),
     run: z
       .object({
@@ -97,4 +118,35 @@ export function docLabel(doc: ManifestDoc): string {
 export function inlineText(doc: ManifestDoc): { label: string; text: string } | undefined {
   const parsed = inlineTextDocSchema.safeParse(doc);
   return parsed.success ? parsed.data : undefined;
+}
+
+export function urlDocument(doc: ManifestDoc): { label: string; url: string } | undefined {
+  const direct = docUrlSchema.safeParse(doc);
+  if (direct.success) return { label: direct.data, url: direct.data };
+  const labeled = labeledUrlDocSchema.safeParse(doc);
+  return labeled.success ? labeled.data : undefined;
+}
+
+export function isSafeDocumentationUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.username || url.password) return false;
+  const parameters = new URLSearchParams(url.search);
+  const fragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  for (const [name] of new URLSearchParams(fragment)) parameters.append(name, "");
+  return [...parameters.keys()].every((name) => !isSensitiveUrlParameter(name));
+}
+
+function isSensitiveUrlParameter(name: string): boolean {
+  const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return (
+    sensitiveUrlParameters.has(normalized) ||
+    ["credential", "password", "secret", "signature", "token"].some((suffix) =>
+      normalized.endsWith(suffix),
+    )
+  );
 }
