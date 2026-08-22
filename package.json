@@ -4,6 +4,7 @@
   "description": "Check whether an AI coding agent can build a working integration from your developer documentation.",
   "license": "Apache-2.0",
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -33,6 +34,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . && oxlint .",
     "test": "vitest run",
+    "test:frameworks": "pnpm build && node scripts/run-framework-trials.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm lint && pnpm test && pnpm typecheck && pnpm build"

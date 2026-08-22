@@ -1,0 +1,11 @@
+{
+  "name": "@docs-trials-fixture/vite",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "8.2.2"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@docs-trials-fixture/next",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "16.3.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}
