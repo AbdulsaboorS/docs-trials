@@ -1,0 +1,23 @@
+src/core/documentation.ts
+  s_03a793f9e7d313::t_8450d0ce9cb2df 1-293
+src/core/run.ts
+  s_03a793f9e7d313::t_72c02a418e9717 1-2,15,18-23,33,62-75,83-84,95,171-207,235,256-268,322,384,489-514,591-663,666,679
+tests/prepare.test.ts
+  s_03a793f9e7d313::t_3b0006f9169582 5-12,15,28-96,98-188,190-218,221-254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a0c6b576a977c14ef23e9cef0071cab153dd4c7a",
+  "prompts": {},
+  "sessions": {
+    "s_03a793f9e7d313": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fd8d57e4fffess4lJw0uwM0XYq",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
