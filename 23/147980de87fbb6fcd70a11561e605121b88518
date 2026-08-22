@@ -1,0 +1,21 @@
+fixtures/frameworks/pnpm-lock.yaml
+  s_9e638af24980c1::t_6d4b88cc740a6b 1-3788
+fixtures/frameworks/pnpm-workspace.yaml
+  s_9e638af24980c1::t_00dbf6f0f1ea44 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "23147980de87fbb6fcd70a11561e605121b88518",
+  "prompts": {},
+  "sessions": {
+    "s_9e638af24980c1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fd8ede24dffe4xEh4HaBWdIaEw",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
