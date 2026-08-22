@@ -64,14 +64,12 @@ export async function observePage(
   }
 
   const consoleErrors: string[] = [];
-  const consoleCandidates: Array<{ text: string; url: string }> = [];
   let droppedConsoleErrors = 0;
   const pageErrors: string[] = [];
   const resourceFailures: string[] = [];
   const serverErrors: string[] = [];
   const ungradedObservations: string[] = [];
   const externalOrigins = new Set<string>();
-  const failedRequestUrls = new Set<string>();
   const pendingResources = new Map<Request, string>();
   const failedResources = new Set<Request>();
   const declaredManifestUrls = new Set<string>();
@@ -91,15 +89,17 @@ export async function observePage(
   try {
     const context = await browser.newContext({ serviceWorkers: "block" });
     const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Runtime.enable");
     page.setDefaultTimeout(remaining(deadline));
 
-    page.on("console", (entry) => {
-      if (!collecting || entry.type() !== "error") return;
-      if (consoleCandidates.length >= maxMessages) {
+    cdp.on("Runtime.consoleAPICalled", (entry) => {
+      if (!collecting || entry.type !== "error") return;
+      if (consoleErrors.length >= maxMessages) {
         droppedConsoleErrors += 1;
         return;
       }
-      consoleCandidates.push({ text: entry.text(), url: entry.location().url });
+      push(consoleErrors, entry.args.map(describeConsoleArgument).join(" "));
     });
     page.on("pageerror", (error) => {
       if (collecting) push(pageErrors, error.message);
@@ -124,7 +124,6 @@ export async function observePage(
       const status = response.status();
       if (status >= 500) push(serverErrors, `${status} ${response.url()}`);
       if (status >= 400) {
-        failedRequestUrls.add(response.url());
         if (isRequiredResource(request, page, previewOrigin, declaredManifestUrls)) {
           recordResourceFailure(request, `${status} ${response.url()}`);
         } else if (isUngradedFailure(request, page, previewOrigin, declaredManifestUrls)) {
@@ -149,7 +148,6 @@ export async function observePage(
       pendingContentRequests.delete(request);
       const response = responses.get(request);
       responses.delete(request);
-      failedRequestUrls.add(request.url());
       if (response) {
         const scan = scanResponse(response, contentScan).finally(() => scans.delete(scan));
         scans.add(scan);
@@ -210,14 +208,6 @@ export async function observePage(
     }
     responses.clear();
     await Promise.allSettled(scans);
-    for (const candidate of consoleCandidates) {
-      const correlatedFailure =
-        failedRequestUrls.has(candidate.url) ||
-        [...failedRequestUrls].some((failedUrl) => candidate.text.includes(failedUrl));
-      if (isBrowserResourceComplaint(candidate.text) && correlatedFailure) continue;
-      push(consoleErrors, candidate.text);
-    }
-
     const title = navigated ? await page.title().catch(() => "") : "";
     const surface = navigated ? await inspectSurface(page) : undefined;
 
@@ -283,16 +273,19 @@ function isRequiredResource(
   previewOrigin: string,
   declaredManifestUrls: ReadonlySet<string>,
 ): boolean {
-  if (safeOrigin(request.url()) !== previewOrigin) return false;
-  if (declaredManifestUrls.has(request.url())) return true;
-  const type = request.resourceType();
-  if (requiredResourceTypes.has(type)) return true;
-  if (type !== "document") return false;
-  try {
-    return request.frame() !== page.mainFrame();
-  } catch {
-    return false;
+  for (let current: Request | null = request; current; current = current.redirectedFrom()) {
+    if (safeOrigin(current.url()) !== previewOrigin) continue;
+    if (declaredManifestUrls.has(current.url())) return true;
+    const type = current.resourceType();
+    if (requiredResourceTypes.has(type)) return true;
+    if (type !== "document") continue;
+    try {
+      if (current.frame() !== page.mainFrame()) return true;
+    } catch {
+      // A detached frame cannot establish that the document was required.
+    }
   }
+  return false;
 }
 
 function isUngradedFailure(
@@ -335,6 +328,7 @@ async function inspectSurface(page: Page): Promise<{
       uncertain: boolean;
     }>(async () => {
       const bodyTextSample = () => document.body?.innerText.slice(0, 2_000) ?? "";
+      let uncertain = false;
       const hasVisibleStyle = (element: Element) => {
         for (let current: Element | null = element; current; current = current.parentElement) {
           const style = getComputedStyle(current);
@@ -345,6 +339,15 @@ async function inspectSurface(page: Page): Promise<{
             Number(style.opacity) === 0 ||
             /opacity\((?:0|0%)\)/.test(style.filter)
           ) {
+            return false;
+          }
+          if (style.clipPath !== "none") {
+            if (/^inset\(\s*(?:100%|[1-9]\d{2,}%)/.test(style.clipPath)) return false;
+            uncertain = true;
+            return false;
+          }
+          if (style.maskImage !== "none") {
+            uncertain = true;
             return false;
           }
         }
@@ -402,6 +405,21 @@ async function inspectSurface(page: Page): Promise<{
         const height = Math.max(1, Math.min(512, Math.round(rectangle.height)));
         const clone = element.cloneNode(true);
         if (!(clone instanceof SVGSVGElement)) return undefined;
+        const sources = [element, ...Array.from(element.querySelectorAll("*"))];
+        const targets = [clone, ...Array.from(clone.querySelectorAll("*"))];
+        for (const [index, source] of sources.entries()) {
+          const target = targets[index];
+          if (!(target instanceof SVGElement)) continue;
+          const computed = getComputedStyle(source);
+          for (let propertyIndex = 0; propertyIndex < computed.length; propertyIndex += 1) {
+            const property = computed.item(propertyIndex);
+            target.style.setProperty(
+              property,
+              computed.getPropertyValue(property),
+              computed.getPropertyPriority(property),
+            );
+          }
+        }
         clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
         clone.setAttribute("width", String(width));
         clone.setAttribute("height", String(height));
@@ -440,7 +458,6 @@ async function inspectSurface(page: Page): Promise<{
         }
       }
 
-      let uncertain = false;
       for (const element of Array.from(
         document.querySelectorAll(
           "img,svg,canvas,video,iframe,input,button,select,textarea,meter,progress",
@@ -514,6 +531,22 @@ async function inspectSurface(page: Page): Promise<{
           }
           kind = "iframe";
         } else {
+          const style = getComputedStyle(element);
+          const paints = [
+            style.color,
+            style.backgroundColor,
+            style.borderTopColor,
+            style.borderRightColor,
+            style.borderBottomColor,
+            style.borderLeftColor,
+            style.outlineColor,
+          ];
+          if (
+            style.backgroundImage === "none" &&
+            paints.every((color) => color === "transparent" || /rgba\([^)]*,\s*0\)/.test(color))
+          ) {
+            continue;
+          }
           kind = "form-control";
         }
         return { kind, bodyTextSample: bodyTextSample(), uncertain: false };
@@ -534,16 +567,19 @@ async function inspectSurface(page: Page): Promise<{
     }));
 }
 
-function isBrowserResourceComplaint(text: string): boolean {
-  return (
-    /^Failed to load resource: (?:the server responded with a status of \d+|net::ERR_)/.test(
-      text,
-    ) ||
-    /^Access to (?:fetch|XMLHttpRequest|script) at /.test(text) ||
-    text.includes("has been blocked by CORS policy") ||
-    text.startsWith("net::ERR_") ||
-    text.includes("ERR_BLOCKED_BY_CLIENT")
-  );
+function describeConsoleArgument(argument: {
+  type: string;
+  value?: unknown;
+  description?: string;
+}): string {
+  if (argument.value !== undefined) {
+    try {
+      return JSON.stringify(argument.value) ?? String(argument.value);
+    } catch {
+      return String(argument.value);
+    }
+  }
+  return argument.description ?? argument.type;
 }
 
 function remaining(deadline: number): number {

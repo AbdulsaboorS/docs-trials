@@ -4,6 +4,7 @@ import { createConnection } from "node:net";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { redact } from "../core/redact";
+import { commandEnvironment, describeCommandEnvironment } from "../util/environment";
 import { delay, terminateProcessTree, trackChild } from "../util/process";
 
 const maxOutputBytes = 200_000;
@@ -16,14 +17,14 @@ export type Preview =
       url: string;
       output: string;
       confirmOwnership: () => Promise<boolean>;
-      stop: () => Promise<void>;
+      stop: () => Promise<boolean>;
     }
   | {
       available: false;
       reason: "application" | "infrastructure";
       detail: string;
       output: string;
-      stop: () => Promise<void>;
+      stop: () => Promise<boolean>;
     };
 
 /**
@@ -38,8 +39,9 @@ export async function startPreview(
   workspace: string,
   url: string,
   timeoutSeconds: number,
+  allowedEnvironment: readonly string[] = [],
 ): Promise<Preview> {
-  const noop = async () => {};
+  const noop = async () => true;
   const occupied = await portInUse(url);
   if (occupied) {
     const port = new URL(url).port || "80";
@@ -50,13 +52,17 @@ export async function startPreview(
   }
 
   let child: ChildProcess;
+  const environment = commandEnvironment(allowedEnvironment, {
+    FORCE_COLOR: "0",
+    NO_COLOR: "1",
+  });
   try {
     child = spawn(command, {
       cwd: resolve(workspace),
       shell: true,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" },
+      env: environment.values,
     });
   } catch (error) {
     const detail = `The start command could not launch: ${error instanceof Error ? error.message : String(error)}`;
@@ -75,11 +81,14 @@ export async function startPreview(
   };
   child.stdout?.on("data", append);
   child.stderr?.on("data", append);
-  const output = () => redact(`$ ${command}\n${Buffer.concat(chunks).toString("utf8")}`);
+  const output = () =>
+    redact(
+      `$ ${command}\n${Buffer.concat(chunks).toString("utf8")}\n${describeCommandEnvironment(environment)}`,
+    );
   let ownershipTimer: NodeJS.Timeout | undefined;
   const stop = async () => {
     if (ownershipTimer) clearInterval(ownershipTimer);
-    await terminateProcessTree(child);
+    return terminateProcessTree(child);
   };
 
   let launchError: Error | undefined;
@@ -99,13 +108,15 @@ export async function startPreview(
       };
     }
     if (child.exitCode !== null || child.signalCode !== null) {
-      const unavailable = child.exitCode === 127;
+      const unavailableTool = child.exitCode === 127;
       return {
         available: false,
-        reason: unavailable ? "infrastructure" : "application",
-        detail: unavailable
-          ? `The start command exited with code 127 before ${url} answered. Docs Trials cannot distinguish unavailable host tooling from an intentional exit.`
-          : `The start command exited with code ${child.exitCode ?? child.signalCode} before ${url} answered.`,
+        reason: unavailableTool || child.signalCode ? "infrastructure" : "application",
+        detail: child.signalCode
+          ? `The start command ended after signal ${child.signalCode} before ${url} answered. Docs Trials cannot attribute the signal to the project.`
+          : unavailableTool
+            ? `The start command exited with code 127 before ${url} answered. Docs Trials cannot distinguish unavailable host tooling from an intentional exit.`
+            : `The start command exited with code ${child.exitCode} before ${url} answered.`,
         output: output(),
         stop,
       };

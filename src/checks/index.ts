@@ -35,7 +35,12 @@ export async function runBaseline(
   const { run } = manifest;
 
   report(`install: ${run.install}`);
-  const install = await runCommand(run.install, workspace, run.commandTimeoutSeconds);
+  const install = await runCommand(
+    run.install,
+    workspace,
+    run.commandTimeoutSeconds,
+    manifest.allowedEnvironment,
+  );
   evidence.push({ id: "install", content: install.output });
   results.push(commandResult("install", install, "Dependency installation"));
 
@@ -50,7 +55,12 @@ export async function runBaseline(
     );
   } else {
     report(`build: ${run.build}`);
-    build = await runCommand(run.build, workspace, run.commandTimeoutSeconds);
+    build = await runCommand(
+      run.build,
+      workspace,
+      run.commandTimeoutSeconds,
+      manifest.allowedEnvironment,
+    );
     evidence.push({ id: "build", content: build.output });
     results.push(commandResult("build", build, "Build"));
   }
@@ -65,7 +75,13 @@ export async function runBaseline(
   }
 
   report(`boot: ${run.start}`);
-  const preview = await startPreview(run.start, workspace, run.url, run.startupTimeoutSeconds);
+  const preview = await startPreview(
+    run.start,
+    workspace,
+    run.url,
+    run.startupTimeoutSeconds,
+    manifest.allowedEnvironment,
+  );
   evidence.push({ id: "boot", content: preview.output });
 
   try {
@@ -119,7 +135,29 @@ export async function runBaseline(
     ungradedObservations.push(...page.ungradedObservations);
     return { results, evidence, ungradedObservations, omittedChecks };
   } finally {
-    await preview.stop();
+    const cleanupSucceeded = await preview.stop();
+    if (!cleanupSucceeded) {
+      evidence.push({
+        id: "cleanup",
+        content: "The preview process group remained after SIGTERM and SIGKILL cleanup attempts.",
+      });
+      ungradedObservations.push(
+        "The preview process group could not be fully terminated after browser observation.",
+      );
+      const bootIndex = results.findIndex((entry) => entry.id === "boot");
+      const boot = results[bootIndex];
+      if (boot) {
+        results[bootIndex] =
+          boot.outcome === "passed"
+            ? result(
+                "boot",
+                "inconclusive",
+                "The application answered, but its preview process group could not be fully terminated.",
+                ["boot", "cleanup"],
+              )
+            : { ...boot, evidenceIds: [...new Set([...boot.evidenceIds, "cleanup"])] };
+      }
+    }
   }
 }
 
@@ -138,6 +176,22 @@ function commandResult(
       id,
       "inconclusive",
       `${label} exceeded its time limit, so no exit result was observed.`,
+      [id],
+    );
+  }
+  if (command.signalCode !== null) {
+    return result(
+      id,
+      "inconclusive",
+      `${label} ended after signal ${command.signalCode}, so Docs Trials cannot attribute the termination to the project.`,
+      [id],
+    );
+  }
+  if (!command.cleanupSucceeded) {
+    return result(
+      id,
+      "inconclusive",
+      `${label} exited, but its process group could not be fully terminated.`,
       [id],
     );
   }
@@ -337,14 +391,6 @@ function egressResult(
       "network-egress",
       "passed",
       `The page contacted only declared origins: ${page.externalOrigins.join(", ")}`,
-      ["browser"],
-    );
-  }
-  if (allowedOrigins.size === 0) {
-    return result(
-      "network-egress",
-      "inconclusive",
-      `The page contacted ${unexpected.join(", ")}. Declare expected origins in \`allowedOrigins\` to make this check decisive.`,
       ["browser"],
     );
   }

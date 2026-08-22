@@ -17,6 +17,8 @@ const scripts = {
   error: "throw new Error('deliberate fixture failure');",
   egress: "fetch('https://example.com/telemetry').catch(() => {});",
   "fetch-404": "fetch('/optional').catch(() => {});",
+  "correlated-console-error":
+    "fetch('/optional').finally(() => console.error('net::ERR_FAILED ' + location.origin + '/optional'));",
   "json-secret": "fetch('/config.json').then((response) => response.json()).catch(() => {});",
   "incomplete-body": "fetch('/stream').catch(() => {});",
   "delayed-error": "setTimeout(() => { throw new Error('delayed fixture failure'); }, 2500);",
@@ -26,7 +28,7 @@ const scripts = {
     "console.error('Failed to load resource: the server responded with a status of 404');",
   "console-cors-words": "console.error('has been blocked by CORS policy');",
   "console-flood":
-    "for (let index = 0; index < 70; index += 1) fetch('/optional?' + index); setTimeout(() => console.error('LATE_APPLICATION_ERROR'), 300);",
+    "for (let index = 0; index < 70; index += 1) console.error('APPLICATION_ERROR_' + index); setTimeout(() => console.error('LATE_APPLICATION_ERROR'), 300);",
   "large-secret": `/* ${"x".repeat(4_000_100)} ${fakeCredential} */ console.log('ready');`,
   websocket: `new WebSocket(${JSON.stringify(process.env.WS_URL ?? "")});`,
   "websocket-same-authority": "new WebSocket('ws://' + location.host + '/socket');",
@@ -40,12 +42,19 @@ const visibleBody =
     "empty-svg": '<svg width="40" height="40"></svg>',
     "transparent-svg":
       '<svg width="40" height="40"><rect width="40" height="40" fill="transparent" /></svg>',
+    "stylesheet-transparent-svg":
+      '<svg class="hidden-paint" width="40" height="40"><rect width="40" height="40" /></svg>',
     "transparent-image":
       '<img width="40" height="40" alt="" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3C/svg%3E" />',
     clipped: '<div style="height:0;overflow:hidden"><h1>Clipped text</h1></div>',
     offscreen: '<h1 style="position:absolute;left:-10000px">Sample App</h1>',
     transparent: '<div style="opacity:0"><h1>Sample App</h1></div>',
     "transparent-color": '<h1 style="color:transparent">Sample App</h1>',
+    "clip-path": '<button style="clip-path:inset(100%)">Clipped control</button>',
+    "masked-control":
+      '<button style="mask-image:linear-gradient(transparent,transparent)">Masked control</button>',
+    "transparent-control":
+      '<button style="appearance:none;background:transparent;border:0;color:transparent;outline:0">Transparent control</button>',
   }[mode] ?? "<h1>Sample App</h1>";
 
 const body = () => `<!doctype html>
@@ -56,6 +65,7 @@ const body = () => `<!doctype html>
     ${mode === "missing-style" ? '<link rel="stylesheet" href="/missing.css" />' : ""}
     ${mode === "missing-manifest" ? '<link rel="manifest" href="/missing.webmanifest" />' : ""}
     ${mode === "missing-font" ? '<style>@font-face { font-family: Missing; src: url("/missing.woff2"); } h1 { font-family: Missing; }</style>' : ""}
+    ${mode === "stylesheet-transparent-svg" ? "<style>.hidden-paint rect { fill: transparent; }</style>" : ""}
   </head>
   <body>
     ${visibleBody}
@@ -105,6 +115,11 @@ const server = createServer((request, response) => {
     return;
   }
   if (request.url === "/app.js") {
+    if (mode === "redirected-asset") {
+      response.writeHead(302, { location: process.env.REDIRECT_URL ?? "/missing.js" });
+      response.end();
+      return;
+    }
     if (mode === "missing-asset") {
       response.writeHead(404, { "content-type": "text/javascript" });
       response.end("missing");

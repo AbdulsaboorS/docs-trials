@@ -20,6 +20,7 @@ const template = (id: string) => ({
     observationWindowSeconds: 5,
   },
   allowedOrigins: [],
+  allowedEnvironment: [],
   agent: { name: "your coding agent" },
 });
 

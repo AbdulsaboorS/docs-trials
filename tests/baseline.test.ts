@@ -17,6 +17,7 @@ function manifestAtPort(
   port: number,
   overrides: Partial<Pick<Manifest, "allowedOrigins">> = {},
   webSocketUrl?: string,
+  redirectUrl?: string,
 ): Manifest {
   return manifestSchema.parse({
     version: 1,
@@ -26,7 +27,7 @@ function manifestAtPort(
     docs: ["https://example.com/docs"],
     run: {
       install: 'node -e "process.exit(0)"',
-      start: `${webSocketUrl ? `WS_URL=${webSocketUrl} ` : ""}SAMPLE_MODE=${mode} PORT=${port} node server.mjs`,
+      start: `${webSocketUrl ? `WS_URL=${webSocketUrl} ` : ""}${redirectUrl ? `REDIRECT_URL=${redirectUrl} ` : ""}SAMPLE_MODE=${mode} PORT=${port} node server.mjs`,
       url: `http://127.0.0.1:${port}`,
       startupTimeoutSeconds: 20,
       commandTimeoutSeconds: 60,
@@ -40,8 +41,9 @@ async function manifest(
   mode: string,
   overrides: Partial<Pick<Manifest, "allowedOrigins">> = {},
   webSocketUrl?: string,
+  redirectUrl?: string,
 ): Promise<Manifest> {
-  return manifestAtPort(mode, await availablePort(), overrides, webSocketUrl);
+  return manifestAtPort(mode, await availablePort(), overrides, webSocketUrl, redirectUrl);
 }
 
 function outcomeOf(results: CheckResult[], id: CheckId) {
@@ -156,6 +158,30 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     expect(deriveOutcome(results)).toBe("failed");
   });
 
+  it("keeps a required asset graded after an external redirect", async () => {
+    const target = createServer((_, response) => response.writeHead(404).end("missing")).listen(
+      0,
+      "127.0.0.1",
+    );
+    await new Promise((done) => target.once("listening", done));
+    const origin = `http://127.0.0.1:${assignedPort(target)}`;
+    try {
+      const { results } = await runBaseline(
+        await manifest(
+          "redirected-asset",
+          { allowedOrigins: [origin] },
+          undefined,
+          `${origin}/missing.js`,
+        ),
+        fixture,
+      );
+      expect(outcomeOf(results, "resource-loads")).toBe("failed");
+      expect(outcomeOf(results, "network-egress")).toBe("passed");
+    } finally {
+      await new Promise((done) => target.close(done));
+    }
+  });
+
   it.each([
     "missing-style",
     "missing-image",
@@ -229,6 +255,14 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     },
   );
 
+  it.each(["stylesheet-transparent-svg", "clip-path", "masked-control", "transparent-control"])(
+    "does not pass %s-only content",
+    async (mode) => {
+      const { results } = await runBaseline(await manifest(mode), fixture);
+      expect(outcomeOf(results, "visible-content")).not.toBe("passed");
+    },
+  );
+
   it.each(["console-resource-words", "console-browser-message", "console-cors-words"])(
     "does not discard the %s application console error",
     async (mode) => {
@@ -240,6 +274,11 @@ describe("runBaseline", { timeout: 120_000 }, () => {
   it("keeps a network-generated console complaint out of application errors", async () => {
     const { results } = await runBaseline(await manifest("missing-asset"), fixture);
     expect(outcomeOf(results, "console-errors")).toBe("passed");
+  });
+
+  it("does not discard an application error that quotes a failed request", async () => {
+    const { results } = await runBaseline(await manifest("correlated-console-error"), fixture);
+    expect(outcomeOf(results, "console-errors")).toBe("failed");
   });
 
   it("cannot pass after console evidence reaches its retention limit", async () => {
@@ -269,10 +308,10 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     expect(outcomeOf(results, "page-load")).toBe("failed");
   });
 
-  it("is inconclusive about undeclared egress and passes when declared", async () => {
+  it("fails undeclared egress and passes when declared", async () => {
     const undeclared = await runBaseline(await manifest("egress"), fixture);
-    expect(outcomeOf(undeclared.results, "network-egress")).toBe("inconclusive");
-    expect(deriveOutcome(undeclared.results)).toBe("inconclusive");
+    expect(outcomeOf(undeclared.results, "network-egress")).toBe("failed");
+    expect(deriveOutcome(undeclared.results)).toBe("failed");
     // A blocked or unreachable external request is a network condition. It must
     // not be reported as an application error as well.
     expect(outcomeOf(undeclared.results, "console-errors")).toBe("passed");
@@ -296,7 +335,7 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     const target = await startWebSocketServer();
     try {
       const run = await runBaseline(await manifest("websocket", {}, target.url), fixture);
-      expect(outcomeOf(run.results, "network-egress")).toBe("inconclusive");
+      expect(outcomeOf(run.results, "network-egress")).toBe("failed");
       const browserEvidence = run.evidence.find((entry) => entry.id === "browser")?.content ?? "";
       expect(browserEvidence).toContain(target.origin);
       expect(browserEvidence).not.toContain(`ws://127.0.0.1:${new URL(target.url).port}`);
@@ -459,6 +498,17 @@ describe("runBaseline", { timeout: 120_000 }, () => {
     };
     expect(outcomeOf((await runBaseline(missing, fixture)).results, "boot")).toBe("inconclusive");
   });
+
+  it.skipIf(process.platform === "win32")(
+    "reports a signalled start command as inconclusive",
+    async () => {
+      const spec = await manifest("clean");
+      const signalled = { ...spec, run: { ...spec.run, start: "kill -TERM $$" } };
+      expect(outcomeOf((await runBaseline(signalled, fixture)).results, "boot")).toBe(
+        "inconclusive",
+      );
+    },
+  );
 
   it("marks boot as failed when the start command exits immediately", async () => {
     const spec = await manifest("clean");

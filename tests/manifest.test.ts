@@ -17,6 +17,7 @@ describe("manifestSchema", () => {
     expect(manifest.run.url).toBe("http://127.0.0.1:5173");
     expect(manifest.run.observationWindowSeconds).toBe(5);
     expect(manifest.goals).toEqual([]);
+    expect(manifest.allowedEnvironment).toEqual([]);
   });
 
   it("rejects a non-loopback preview URL", () => {
@@ -49,6 +50,18 @@ describe("manifestSchema", () => {
     });
     expect(manifest.docs).toHaveLength(2);
     expect(docLabel(manifest.docs[1]!)).toBe("Notes (inline text)");
+  });
+
+  it("accepts unique portable environment names and rejects duplicates", () => {
+    expect(
+      manifestSchema.parse({ ...base, allowedEnvironment: ["EXAMPLE_API_KEY"] }).allowedEnvironment,
+    ).toEqual(["EXAMPLE_API_KEY"]);
+    expect(() =>
+      manifestSchema.parse({ ...base, allowedEnvironment: ["DUPLICATE", "DUPLICATE"] }),
+    ).toThrow(/at most once/i);
+    expect(() => manifestSchema.parse({ ...base, allowedEnvironment: ["NOT-PORTABLE"] })).toThrow(
+      /portable/i,
+    );
   });
 });
 

@@ -69,9 +69,14 @@ when the result is inconclusive. That makes it usable in CI.
     "url": "http://127.0.0.1:5173",
     "observationWindowSeconds": 5
   },
-  "allowedOrigins": ["https://api.example.com"]
+  "allowedOrigins": ["https://api.example.com"],
+  "allowedEnvironment": ["EXAMPLE_API_KEY"]
 }
 ```
+
+Lifecycle commands receive a small base environment plus only the variable
+names listed in `allowedEnvironment`. The manifest and report never store their
+values.
 
 `goals` are recorded in the report and **never graded**. Only the checks below
 produce a result.

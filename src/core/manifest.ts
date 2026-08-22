@@ -7,6 +7,9 @@ const labeledUrlDocSchema = z.object({ label: z.string().min(1), url: z.url() })
 const inlineTextDocSchema = z
   .object({ label: z.string().min(1), text: z.string().min(1) })
   .strict();
+const environmentNameSchema = z
+  .string()
+  .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Use a portable environment-variable name.");
 
 /**
  * `goals` describe what the author wants the integration to do. Docs Trials
@@ -44,6 +47,12 @@ export const manifestSchema = z
       })
       .strict(),
     allowedOrigins: z.array(z.url()).default([]),
+    allowedEnvironment: z
+      .array(environmentNameSchema)
+      .refine((names) => new Set(names).size === names.length, {
+        message: "List each allowed environment-variable name at most once.",
+      })
+      .default([]),
     agent: z
       .object({ name: z.string().min(1), model: z.string().min(1).optional() })
       .strict()
