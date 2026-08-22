@@ -8,6 +8,7 @@ type CdpPayload = { readonly [key: string]: CdpValue };
 class FakeCdpSession {
   readonly calls: string[] = [];
   readonly streamBodies = new Map<string, string>();
+  readonly completedBodies = new Map<string, string>();
   failStream = false;
   streamFailuresRemaining = 0;
   hangStream = false;
@@ -32,6 +33,7 @@ class FakeCdpSession {
     method:
       | "Network.enable"
       | "Network.streamResourceContent"
+      | "Network.getResponseBody"
       | "Fetch.enable"
       | "Fetch.continueRequest"
       | "Fetch.disable"
@@ -50,6 +52,11 @@ class FakeCdpSession {
         await new Promise((resolveDelay) => setTimeout(resolveDelay, this.streamDelayMs));
       }
       return { bufferedData: this.streamBodies.get(String(params?.requestId)) ?? "" };
+    }
+    if (method === "Network.getResponseBody") {
+      const body = this.completedBodies.get(String(params?.requestId));
+      if (body === undefined) throw new Error("completed body unavailable");
+      return { body, base64Encoded: true };
     }
     if (method === "Fetch.continueRequest") {
       if (this.failContinue) throw new Error("continue failed");
@@ -439,6 +446,20 @@ describe("bounded content capture", () => {
     expect(scan.responses[0]?.disposition).toBe("unavailable");
     expect(scan.knownGapCount).toBe(1);
     expect(scan.captureFaultCount).toBe(1);
+  });
+
+  it("recovers a completed body when stream activation loses the loading race", async () => {
+    const session = new FakeCdpSession();
+    session.failStream = true;
+    session.completedBodies.set("recovered", Buffer.from("complete body").toString("base64"));
+    const capture = await startContentCapture(session, origin);
+    request(session, "recovered", "/recovered");
+    finishRequest(session, "recovered");
+
+    const scan = await capture.finish();
+    expect(scan.responses[0]?.disposition).toBe("complete");
+    expect(scan.captureFaultCount).toBe(0);
+    expect(scan.responsesScanned).toBe(1);
   });
 
   it("uses the response pause when response metadata arrives first", async () => {

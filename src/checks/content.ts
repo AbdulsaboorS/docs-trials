@@ -53,6 +53,7 @@ type ResponseState = {
   truncated: boolean;
   skipped: boolean;
   streamFailed: boolean;
+  recovering: boolean;
   streamFailureDetail: string;
   observedBeforeInitialization: number;
   uncapturedBeforeInitialization: number;
@@ -91,12 +92,14 @@ const dataEventSchema = z.object({
 });
 const lifecycleEventSchema = z.object({ requestId: z.string() });
 const streamResultSchema = z.object({ bufferedData: z.string() });
+const responseBodySchema = z.object({ body: z.string(), base64Encoded: z.boolean() });
 
 type ContentCapture = { finish: () => Promise<ContentScan> };
 type ContentCaptureOptions = { operationTimeoutMs?: number };
 type CdpMethod =
   | "Network.enable"
   | "Network.streamResourceContent"
+  | "Network.getResponseBody"
   | "Fetch.enable"
   | "Fetch.continueRequest"
   | "Fetch.disable"
@@ -339,7 +342,9 @@ export async function startContentCapture(
     if (!state) return;
     state.finished = true;
     if (failed) state.unavailable = true;
-    else if (state.streamFailed && !state.initialized) failStreaming(state);
+    else if (state.streamFailed && !state.initialized) {
+      recoverFinishedBody(parsed.data.requestId, state);
+    }
     activeStates.delete(parsed.data.requestId);
   }
 
@@ -392,6 +397,7 @@ export async function startContentCapture(
       truncated: false,
       skipped: false,
       streamFailed: false,
+      recovering: false,
       streamFailureDetail: "",
       observedBeforeInitialization: 0,
       uncapturedBeforeInitialization: 0,
@@ -462,8 +468,8 @@ export async function startContentCapture(
         if (state.readyToStream && state.recorded && !state.finished && state.streamAttempts < 2) {
           settleAfterAttempt = false;
           startStreaming(requestId, state, timeoutMs, settled);
-        } else if (state.finished || state.streamAttempts >= 2) {
-          failStreaming(state);
+        } else if (state.finished) {
+          recoverFinishedBody(requestId, state);
         }
       },
       timeoutMs,
@@ -477,6 +483,38 @@ export async function startContentCapture(
     const requestId = state.pausedRequestId;
     state.pausedRequestId = "";
     if (requestId) continueResponse(requestId, state);
+  }
+
+  function recoverFinishedBody(requestId: string, state: ResponseState): void {
+    if (state.initialized || state.recovering) return;
+    state.recovering = true;
+    if (!reserveOperation(state)) return;
+    trackOperation(
+      session.send("Network.getResponseBody", { requestId }).then((value) => {
+        const result = responseBodySchema.parse(value);
+        const body = result.base64Encoded ? decodeBase64(result.body) : Buffer.from(result.body);
+        if (!body) throw new Error("Completed response body was not valid base64.");
+        retainedTotal -= state.retainedBytes;
+        state.chunks = [];
+        state.retainedBytes = 0;
+        state.retainedBeforeInitialization = 0;
+        state.response.observedBytes = 0;
+        state.initialized = true;
+        state.streamFailed = false;
+        state.streamFailureDetail = "";
+        state.bufferedBytes = body.byteLength;
+        retain(state, body, body.byteLength);
+        state.bufferedRetainedBytes = state.retainedBytes;
+      }),
+      (error) => {
+        state.streamFailureDetail = `${state.streamFailureDetail}; completed-body recovery failed: ${errorDetail(error)}`;
+        failStreaming(state);
+      },
+      operationTimeoutMs,
+      () => {
+        state.recovering = false;
+      },
+    );
   }
 
   function continueResponse(
