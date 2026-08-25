@@ -1,0 +1,19 @@
+tests/redact.test.ts
+  s_e7116addcb17c4::t_60fcc5a8e724d0 32-51,58-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "96a631bec1ff1eba0ffaa813e1aa182002b28577",
+  "prompts": {},
+  "sessions": {
+    "s_e7116addcb17c4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fc5b21b0effepUWnuQz03VtNK2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
