@@ -29,10 +29,47 @@ describe("redact", () => {
       "authorization = await canAccess(user)",
     );
     expect(redact("authorization = new Header(value)")).toBe("authorization = new Header(value)");
+    expect(redact('const token = form.get("cf-turnstile-response");')).toBe(
+      'const token = form.get("cf-turnstile-response");',
+    );
+    expect(redact("let token = process.env.ACCESS_TOKEN;")).toBe(
+      "let token = process.env.ACCESS_TOKEN;",
+    );
+    expect(redact("const token = config.token!;")).toBe("const token = config.token!;");
+    expect(redact("const token = this.#token;")).toBe("const token = this.#token;");
+    expect(redact("const token = données.jeton;")).toBe("const token = données.jeton;");
+    expect(redact('var token = form.get\n("cf-turnstile-response");')).toBe(
+      'var token = form.get\n("cf-turnstile-response");',
+    );
+    expect(redact("const first = 1, token = process.env.TOKEN;")).toBe(
+      "const first = 1, token = process.env.TOKEN;",
+    );
+    expect(redact("const /* note */ token = process.env.TOKEN;")).toBe(
+      "const /* note */ token = process.env.TOKEN;",
+    );
+    expect(redact('+const token = form.get("value");')).toBe('+const token = form.get("value");');
+    expect(redact('-const token = form.get("value");')).toBe('-const token = form.get("value");');
     expect(redact("function readPassword(input) { return input; }")).toBe(
       "function readPassword(input) { return input; }",
     );
     expect(redact("// clear the cookie before logout")).toBe("// clear the cookie before logout");
+  });
+
+  it("still masks unquoted credential-like values followed by parentheses", () => {
+    expect(redact("token=abc123(callback)")).toBe("token=[REDACTED](callback)");
+    expect(redact("CONST token=abc123(callback)")).toBe("CONST token=[REDACTED](callback)");
+    expect(redact("const password = 123456789;")).toBe("const password = [REDACTED];");
+    expect(redact("const token = `generic-secret-123`; ")).toBe("const token = `[REDACTED]`; ");
+    expect(redact("const token = `generic-\nsecret-123`; ")).toBe("const token = `[REDACTED]`; ");
+    expect(redact("const token = `generic\\\nsecret-123`; ")).toBe("const token = `[REDACTED]`; ");
+    expect(redact("const token = `generic\\\r\nsecret-123`; ")).toBe(
+      "const token = `[REDACTED]`; ",
+    );
+  });
+
+  it("leaves a long unterminated template unchanged without excessive backtracking", () => {
+    const input = `token = \`${"\\a".repeat(2_000)}`;
+    expect(redact(input)).toBe(input);
   });
 
   it("preserves diff prefixes around multiline secret expressions", () => {

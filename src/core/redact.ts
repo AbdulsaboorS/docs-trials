@@ -4,6 +4,12 @@ const secretKey =
   "api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|bearer[_-]?token|private[_-]?key|token|secret|password|passwd|cookie";
 const sameLineWhitespace = "[^\\S\\r\\n\\u2028\\u2029]*";
 const lineBreak = "(?:\\r\\n|[\\r\\n\\u2028\\u2029])";
+const identifier = "[#$_\\p{ID_Start}][$_\\p{ID_Continue}]*";
+const sourceReferencePattern = new RegExp(
+  `^(?:${identifier})(?:(?:\\.|\\?\\.)${identifier})*!?$`,
+  "u",
+);
+const sourceDeclarationPattern = /^(?:const|let|var)[^\S\r\n\u2028\u2029]+$/;
 
 /**
  * Redaction masks values. It never rewrites the surrounding text.
@@ -12,21 +18,30 @@ const lineBreak = "(?:\\r\\n|[\\r\\n\\u2028\\u2029])";
  * `const token = useToken();` into `const [REDACTED];`. Evidence must stay
  * readable, so every pattern below preserves its key and masks only the value.
  */
-const patterns: Array<{ pattern: RegExp; replacement: string }> = [
+type MaskingPattern = { pattern: RegExp; replacement: string };
+
+const patternsBeforeUnquotedAssignment: MaskingPattern[] = [
+  {
+    pattern: new RegExp(
+      `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(\\x60)(?:\\\\[\\s\\S]|(?!\\2)[^\\\\])*?\\2`,
+      "gi",
+    ),
+    replacement: "$1$2[REDACTED]$2",
+  },
   {
     pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
     replacement: "[REDACTED PRIVATE KEY]",
   },
   {
     pattern: new RegExp(
-      `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(${lineBreak}(?:[+-]${sameLineWhitespace}|${sameLineWhitespace}))(["'])(?:\\\\.|(?!\\3)[^\\\\\\r\\n\\u2028\\u2029])*\\3`,
+      `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(${lineBreak}(?:[+-]${sameLineWhitespace}|${sameLineWhitespace}))(["'\\x60])(?:\\\\.|(?!\\3)[^\\\\\\r\\n\\u2028\\u2029])*\\3`,
       "gi",
     ),
     replacement: "$1$2$3[REDACTED]$3",
   },
   {
     pattern: new RegExp(
-      `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(["'])(?:\\\\.|(?!\\2)[^\\\\\\r\\n\\u2028\\u2029])*\\2`,
+      `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(["'\\x60])(?:\\\\.|(?!\\2)[^\\\\\\r\\n\\u2028\\u2029])*\\2`,
       "gi",
     ),
     replacement: "$1$2[REDACTED]$2",
@@ -35,13 +50,14 @@ const patterns: Array<{ pattern: RegExp; replacement: string }> = [
     pattern: new RegExp(`([?&](?:${secretKey})=)[^&#\\s"']+`, "gi"),
     replacement: "$1[REDACTED]",
   },
-  {
-    pattern: new RegExp(
-      `(^|[\\s,{]|--)(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(?!["']|\\[REDACTED\\])(?=[^\\s,;{}()[\\]"']*[0-9._~+/=-])[^\\s,;{}()[\\]"']+`,
-      "gim",
-    ),
-    replacement: "$1$2[REDACTED]",
-  },
+];
+
+const unquotedAssignmentPattern = new RegExp(
+  `(^|[\\s,{+-]|--)((?:(?:const|let|var)[^\\S\\r\\n\\u2028\\u2029]+)?)(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(?!["'\\x60]|\\[REDACTED\\])(?=[^\\s,;{}()[\\]"'\\x60]*[0-9._~+/=-])([^\\s,;{}()[\\]"'\\x60]+)`,
+  "gim",
+);
+
+const patternsAfterUnquotedAssignment: MaskingPattern[] = [
   {
     pattern: new RegExp(
       `^(${sameLineWhitespace}[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)${sameLineWhitespace}=${sameLineWhitespace})\\S+`,
@@ -106,9 +122,51 @@ export function knownPrefixes(): string {
 }
 
 export function redact(value: string): string {
+  const before = applyPatterns(value, patternsBeforeUnquotedAssignment);
+  const unquoted = before.replace(
+    unquotedAssignmentPattern,
+    (
+      match,
+      boundary: string,
+      declaration: string,
+      assignment: string,
+      assignedValue: string,
+      offset: number,
+      input: string,
+    ) =>
+      isSourceReferenceAssignment(input, offset, boundary, declaration, assignedValue)
+        ? match
+        : `${boundary}${declaration}${assignment}[REDACTED]`,
+  );
+  return applyPatterns(unquoted, patternsAfterUnquotedAssignment);
+}
+
+function applyPatterns(value: string, patterns: MaskingPattern[]): string {
   return patterns.reduce(
     (result, { pattern, replacement }) => result.replace(pattern, replacement),
     value,
+  );
+}
+
+function isSourceReferenceAssignment(
+  input: string,
+  offset: number,
+  boundary: string,
+  declaration: string,
+  assignedValue: string,
+): boolean {
+  if (!sourceReferencePattern.test(assignedValue)) return false;
+  if (sourceDeclarationPattern.test(declaration)) return true;
+
+  const lineStart = Math.max(
+    input.lastIndexOf("\n", offset - 1),
+    input.lastIndexOf("\r", offset - 1),
+    input.lastIndexOf("\u2028", offset - 1),
+    input.lastIndexOf("\u2029", offset - 1),
+  );
+  const prefix = input.slice(lineStart + 1, offset + boundary.length);
+  return /^[+-]?[^\S\r\n\u2028\u2029]*(?:const|let|var)\b[^;\r\n\u2028\u2029]*(?:,[^\S\r\n\u2028\u2029]*|\*\/[^\S\r\n\u2028\u2029]*)$/.test(
+    prefix,
   );
 }
 
