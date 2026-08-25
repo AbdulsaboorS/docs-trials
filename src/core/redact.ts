@@ -2,6 +2,8 @@ import { z, type JSONType } from "zod";
 
 const secretKey =
   "api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|bearer[_-]?token|private[_-]?key|token|secret|password|passwd|cookie";
+const sameLineWhitespace = "[^\\S\\r\\n\\u2028\\u2029]*";
+const lineBreak = "(?:\\r\\n|[\\r\\n\\u2028\\u2029])";
 
 /**
  * Redaction masks values. It never rewrites the surrounding text.
@@ -16,7 +18,17 @@ const patterns: Array<{ pattern: RegExp; replacement: string }> = [
     replacement: "[REDACTED PRIVATE KEY]",
   },
   {
-    pattern: new RegExp(`(["']?(?:${secretKey})["']?\\s*[:=]\\s*)(["'])[^"'\\n]*\\2`, "gi"),
+    pattern: new RegExp(
+      `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(${lineBreak}(?:[+-]${sameLineWhitespace}|${sameLineWhitespace}))(["'])(?:\\\\.|(?!\\3)[^\\\\\\r\\n\\u2028\\u2029])*\\3`,
+      "gi",
+    ),
+    replacement: "$1$2$3[REDACTED]$3",
+  },
+  {
+    pattern: new RegExp(
+      `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(["'])(?:\\\\.|(?!\\2)[^\\\\\\r\\n\\u2028\\u2029])*\\2`,
+      "gi",
+    ),
     replacement: "$1$2[REDACTED]$2",
   },
   {
@@ -25,27 +37,31 @@ const patterns: Array<{ pattern: RegExp; replacement: string }> = [
   },
   {
     pattern: new RegExp(
-      `(^|[\\s,{]|--)(["']?(?:${secretKey})["']?\\s*[:=]\\s*)(?!["']|\\[REDACTED\\])(?=[^\\s,;{}()[\\]"']*[0-9._~+/=-])[^\\s,;{}()[\\]"']+`,
+      `(^|[\\s,{]|--)(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(?!["']|\\[REDACTED\\])(?=[^\\s,;{}()[\\]"']*[0-9._~+/=-])[^\\s,;{}()[\\]"']+`,
       "gim",
     ),
     replacement: "$1$2[REDACTED]",
   },
   {
-    pattern: new RegExp(`^(\\s*[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)\\s*=\\s*)\\S+`, "gim"),
+    pattern: new RegExp(
+      `^(${sameLineWhitespace}[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)${sameLineWhitespace}=${sameLineWhitespace})\\S+`,
+      "gim",
+    ),
     replacement: "$1[REDACTED]",
   },
   {
     pattern:
-      /(\bauthorization\s*[:=]\s*)(["'])(?:Basic|Bearer|ApiKey|Digest|Token|AWS4-HMAC-SHA256)\s+(?!\[REDACTED\])[^\r\n]*?\2/gi,
+      /(\bauthorization[^\S\r\n\u2028\u2029]*[:=][^\S\r\n\u2028\u2029]*)(["'])(?:Basic|Bearer|ApiKey|Digest|Token|AWS4-HMAC-SHA256)\s+(?!\[REDACTED\])[^\r\n\u2028\u2029]*?\2/gi,
     replacement: "$1$2[REDACTED]$2",
   },
   {
     pattern:
-      /^((?:[^\r\n]*?>\s*)?authorization\s*[:=]\s*)(?!\[REDACTED\])(?:Basic|Bearer|ApiKey|Digest|Token|AWS4-HMAC-SHA256)\s+[^\r\n]+$/gim,
+      /^((?:[^\r\n\u2028\u2029]*?>[^\S\r\n\u2028\u2029]*)?authorization[^\S\r\n\u2028\u2029]*[:=][^\S\r\n\u2028\u2029]*)(?!\[REDACTED\])(?:Basic|Bearer|ApiKey|Digest|Token|AWS4-HMAC-SHA256)\s+[^\r\n\u2028\u2029]+$/gim,
     replacement: "$1[REDACTED]",
   },
   {
-    pattern: /((?:^|\n)\s*(?:set-)?cookie\s*:\s*)[^\n]+/gi,
+    pattern:
+      /((?:^|[\r\n\u2028\u2029])[^\S\r\n\u2028\u2029]*(?:set-)?cookie[^\S\r\n\u2028\u2029]*:[^\S\r\n\u2028\u2029]*)[^\r\n\u2028\u2029]+/gi,
     replacement: "$1[REDACTED]",
   },
   { pattern: /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, replacement: "Bearer [REDACTED]" },

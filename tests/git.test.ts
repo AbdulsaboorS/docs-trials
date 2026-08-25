@@ -33,7 +33,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(workspace, { recursive: true, force: true });
+  await rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 });
 
 describe("source diff evidence", () => {

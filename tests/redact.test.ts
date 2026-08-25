@@ -17,6 +17,9 @@ describe("redact", () => {
       "$ curl --password=[REDACTED] https://example.test",
     );
     expect(redact("prefix password=hunter2 suffix")).toBe("prefix password=[REDACTED] suffix");
+    expect(redact("token\u00a0=\u00a0plain-text-secret")).toBe("token\u00a0=\u00a0[REDACTED]");
+    expect(redact(`password="don't-leak"`)).toBe('password="[REDACTED]"');
+    expect(redact('password="abc\\"def-123"')).toBe('password="[REDACTED]"');
   });
 
   it("does not corrupt ordinary source that mentions a secret word", () => {
@@ -31,6 +34,31 @@ describe("redact", () => {
     );
     expect(redact("// clear the cookie before logout")).toBe("// clear the cookie before logout");
   });
+
+  it("preserves diff prefixes around multiline secret expressions", () => {
+    const diff = [
+      "+export const auth = betterAuth({",
+      "+  secret:",
+      "+    process.env.BETTER_AUTH_SECRET ??",
+      '+    "local-development-secret-change-me-123456789",',
+      "+});",
+    ].join("\n");
+
+    expect(redact(diff)).toBe(diff);
+  });
+
+  it("masks a quoted value on the next line without changing its diff prefix", () => {
+    expect(redact('+password =\n+  "hunter2"')).toBe('+password =\n+  "[REDACTED]"');
+    expect(redact(`+password =\n+  "don't-leak"`)).toBe('+password =\n+  "[REDACTED]"');
+  });
+
+  it.each(["\r", "\u2028", "\u2029"])(
+    "does not consume the %j line separator inside a quoted value",
+    (separator) => {
+      const input = `secret: "abc${separator}+next"`;
+      expect(redact(input)).toBe(input);
+    },
+  );
 
   it("masks bearer tokens, JWTs, and private keys", () => {
     expect(redact("Authorization: Bearer abcdefghijklmnop")).toContain("[REDACTED]");

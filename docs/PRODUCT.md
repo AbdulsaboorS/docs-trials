@@ -135,9 +135,10 @@ not ship model-generated recommendations.
 The verifier never trains or modifies itself from user feedback. Deterministic
 checks change only through reviewed, tested, and versioned source releases.
 
-Gate 2 defines and tests structured feedback fields. A useful feedback record
-asks whether a finding was accurate, whether guidance was useful, whether docs
-changed, and whether a controlled follow-up attempt improved.
+Structured feedback is later product research, not a Gate 2 requirement. A
+useful future feedback record asks whether a finding was accurate, whether
+guidance was useful, whether docs changed, and whether a controlled follow-up
+attempt improved.
 
 The strongest learning signal is a documentation change linked to an improved
 follow-up attempt. A general thumbs-up is secondary evidence.
@@ -162,9 +163,11 @@ but cannot change stored outcomes.
 Gate 2 uses one frozen release candidate for ten unsteered attempts:
 
 - six documentation products;
-- four products repeated with a second agent product;
+- four products repeated in fresh, unsteered subject-agent sessions;
 - static HTML, Vite, Astro, and one server-rendered framework;
 - a fixed environment within each repeated pair;
+- the agent product and model recorded for every attempt, without requiring a
+  cross-harness comparison;
 - no agent leaderboard.
 
 Gate 2 succeeds when all reports classify observations honestly, retain
