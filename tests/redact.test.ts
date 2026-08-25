@@ -49,6 +49,12 @@ describe("redact", () => {
     );
     expect(redact('+const token = form.get("value");')).toBe('+const token = form.get("value");');
     expect(redact('-const token = form.get("value");')).toBe('-const token = form.get("value");');
+    expect(redact("+  secret: process.env.BETTER_AUTH_SECRET ?? localSecret,")).toBe(
+      "+  secret: process.env.BETTER_AUTH_SECRET ?? localSecret,",
+    );
+    expect(redact('+      password: form.get("password"),')).toBe(
+      '+      password: form.get("password"),',
+    );
     expect(redact("function readPassword(input) { return input; }")).toBe(
       "function readPassword(input) { return input; }",
     );
@@ -58,6 +64,9 @@ describe("redact", () => {
   it("still masks unquoted credential-like values followed by parentheses", () => {
     expect(redact("token=abc123(callback)")).toBe("token=[REDACTED](callback)");
     expect(redact("CONST token=abc123(callback)")).toBe("CONST token=[REDACTED](callback)");
+    expect(redact("password: abc.def")).toBe("password: [REDACTED]");
+    expect(redact("+ password: abc.def")).toBe("+ password: [REDACTED]");
+    expect(redact("+ password: hunter2")).toBe("+ password: [REDACTED]");
     expect(redact("const password = 123456789;")).toBe("const password = [REDACTED];");
     expect(redact("const token = `generic-secret-123`; ")).toBe("const token = `[REDACTED]`; ");
     expect(redact("const token = `generic-\nsecret-123`; ")).toBe("const token = `[REDACTED]`; ");

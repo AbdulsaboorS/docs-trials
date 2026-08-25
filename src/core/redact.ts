@@ -134,7 +134,15 @@ export function redact(value: string): string {
       offset: number,
       input: string,
     ) =>
-      isSourceReferenceAssignment(input, offset, boundary, declaration, assignedValue)
+      isSourceReferenceAssignment(
+        input,
+        offset,
+        match.length,
+        boundary,
+        declaration,
+        assignment,
+        assignedValue,
+      )
         ? match
         : `${boundary}${declaration}${assignment}[REDACTED]`,
   );
@@ -151,8 +159,10 @@ function applyPatterns(value: string, patterns: MaskingPattern[]): string {
 function isSourceReferenceAssignment(
   input: string,
   offset: number,
+  matchLength: number,
   boundary: string,
   declaration: string,
+  assignment: string,
   assignedValue: string,
 ): boolean {
   if (!sourceReferencePattern.test(assignedValue)) return false;
@@ -165,6 +175,16 @@ function isSourceReferenceAssignment(
     input.lastIndexOf("\u2029", offset - 1),
   );
   const prefix = input.slice(lineStart + 1, offset + boundary.length);
+  if (
+    assignment.includes(":") &&
+    /^[+-][^\S\r\n\u2028\u2029]*$/.test(prefix) &&
+    (assignedValue.startsWith("process.env.") ||
+      assignedValue.startsWith("import.meta.env.") ||
+      (assignedValue.includes(".") &&
+        /^[^\S\r\n\u2028\u2029]*\(/.test(input.slice(offset + matchLength))))
+  ) {
+    return true;
+  }
   return /^[+-]?[^\S\r\n\u2028\u2029]*(?:const|let|var)\b[^;\r\n\u2028\u2029]*(?:,[^\S\r\n\u2028\u2029]*|\*\/[^\S\r\n\u2028\u2029]*)$/.test(
     prefix,
   );
