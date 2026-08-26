@@ -1,0 +1,33 @@
+src/core/redact.ts
+  s_e7116addcb17c4::t_aa3f61996b8c5c 5,29-42,79-83,166-201
+src/core/report.ts
+  s_9de62dc57bf989::t_7e524777d6be62 149
+tests/redact.test.ts
+  s_9de62dc57bf989::t_9374aa27ed27a1 23-53
+tests/report.test.ts
+  s_9de62dc57bf989::t_dcc181e768f171 187-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d4343745b15a2715af757d6652ab162af9a70a9c",
+  "prompts": {},
+  "sessions": {
+    "s_9de62dc57bf989": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_feebd0a4effetU9pEThZjx1dDu",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_e7116addcb17c4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fc5b21b0effepUWnuQz03VtNK2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
