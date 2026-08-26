@@ -20,6 +20,37 @@ describe("redact", () => {
     expect(redact("token\u00a0=\u00a0plain-text-secret")).toBe("token\u00a0=\u00a0[REDACTED]");
     expect(redact(`password="don't-leak"`)).toBe('password="[REDACTED]"');
     expect(redact('password="abc\\"def-123"')).toBe('password="[REDACTED]"');
+    expect(
+      redact(
+        '+    "build": "BETTER_AUTH_SECRET=local-development-secret-at-least-32-characters BETTER_AUTH_URL=http://127.0.0.1:4316 next build",',
+      ),
+    ).toBe(
+      '+    "build": "BETTER_AUTH_SECRET=[REDACTED] BETTER_AUTH_URL=http://127.0.0.1:4316 next build",',
+    );
+    expect(
+      redact(
+        "$ BETTER_AUTH_SECRET=local-development-secret-at-least-32-characters BETTER_AUTH_URL=http://127.0.0.1:4316 next build",
+      ),
+    ).toBe("$ BETTER_AUTH_SECRET=[REDACTED] BETTER_AUTH_URL=http://127.0.0.1:4316 next build");
+    expect(redact("API_SECRET=foo; next")).toBe("API_SECRET=[REDACTED]; next");
+    expect(redact("API_SECRET = foo")).toBe("API_SECRET = [REDACTED]");
+    expect(redact("API_TOKEN=foo&& next")).toBe("API_TOKEN=[REDACTED]&& next");
+    expect(redact("const BETTER_AUTH_SECRET=process.env.BETTER_AUTH_SECRET;")).toBe(
+      "const BETTER_AUTH_SECRET=process.env.BETTER_AUTH_SECRET;",
+    );
+    expect(redact("const API_SECRET=config.apiSecret;")).toBe("const API_SECRET=config.apiSecret;");
+    expect(redact("const API_SECRET=secretMatch?.[1] || fallback;")).toBe(
+      "const API_SECRET=secretMatch?.[1] || fallback;",
+    );
+    expect(redact("const first=1, API_SECRET=config.apiSecret;")).toBe(
+      "const first=1, API_SECRET=config.apiSecret;",
+    );
+    expect(redact(String.raw`API_SECRET=\"local development secret\"`)).toBe(
+      String.raw`API_SECRET=\"[REDACTED]\"`,
+    );
+    expect(redact(String.raw`API_SECRET=\"abc\\\"def\" next`)).toBe(
+      String.raw`API_SECRET=\"[REDACTED]\" next`,
+    );
   });
 
   it("does not corrupt ordinary source that mentions a secret word", () => {

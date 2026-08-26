@@ -2,6 +2,7 @@ import { z, type JSONType } from "zod";
 
 const secretKey =
   "api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|bearer[_-]?token|private[_-]?key|token|secret|password|passwd|cookie";
+const environmentSecretKey = "[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)";
 const sameLineWhitespace = "[^\\S\\r\\n\\u2028\\u2029]*";
 const lineBreak = "(?:\\r\\n|[\\r\\n\\u2028\\u2029])";
 const identifier = "[#$_\\p{ID_Start}][$_\\p{ID_Continue}]*";
@@ -25,6 +26,20 @@ const sourceDeclarationPattern = /^(?:const|let|var)[^\S\r\n\u2028\u2029]+$/;
 type MaskingPattern = { pattern: RegExp; replacement: string };
 
 const patternsBeforeUnquotedAssignment: MaskingPattern[] = [
+  {
+    pattern: new RegExp(
+      `(\\b${environmentSecretKey}${sameLineWhitespace}=${sameLineWhitespace})(\\\\)(["'])[^\\r\\n\\u2028\\u2029]*?(?<!\\\\)\\2\\3`,
+      "g",
+    ),
+    replacement: "$1$2$3[REDACTED]$2$3",
+  },
+  {
+    pattern: new RegExp(
+      `(\\b${environmentSecretKey}${sameLineWhitespace}=${sameLineWhitespace})(["'])(?:\\\\.|(?!\\2)[^\\\\\\r\\n\\u2028\\u2029])*\\2`,
+      "g",
+    ),
+    replacement: "$1$2[REDACTED]$2",
+  },
   {
     pattern: new RegExp(
       `(["']?(?:${secretKey})["']?${sameLineWhitespace}[:=]${sameLineWhitespace})(\\x60)(?:\\\\[\\s\\S]|(?!\\2)[^\\\\])*?\\2`,
@@ -61,14 +76,12 @@ const unquotedAssignmentPattern = new RegExp(
   "gim",
 );
 
+const environmentAssignmentPattern = new RegExp(
+  `(\\b${environmentSecretKey}${sameLineWhitespace}=${sameLineWhitespace})(?!\\[REDACTED\\])([^\\s\\\\"'\\x60;&|<>[\\]]+)`,
+  "g",
+);
+
 const patternsAfterUnquotedAssignment: MaskingPattern[] = [
-  {
-    pattern: new RegExp(
-      `^(${sameLineWhitespace}[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)${sameLineWhitespace}=${sameLineWhitespace})\\S+`,
-      "gim",
-    ),
-    replacement: "$1[REDACTED]",
-  },
   {
     pattern:
       /(\bauthorization[^\S\r\n\u2028\u2029]*[:=][^\S\r\n\u2028\u2029]*)(["'])(?:Basic|Bearer|ApiKey|Digest|Token|AWS4-HMAC-SHA256)\s+(?!\[REDACTED\])[^\r\n\u2028\u2029]*?\2/gi,
@@ -150,7 +163,42 @@ export function redact(value: string): string {
         ? match
         : `${boundary}${declaration}${assignment}[REDACTED]`,
   );
-  return applyPatterns(unquoted, patternsAfterUnquotedAssignment);
+  const environmentRedacted = unquoted.replace(
+    environmentAssignmentPattern,
+    (match, assignment: string, assignedValue: string, offset: number, input: string) =>
+      isEnvironmentSourceAssignment(input, offset, match.length, assignment, assignedValue)
+        ? match
+        : `${assignment}[REDACTED]`,
+  );
+  return applyPatterns(environmentRedacted, patternsAfterUnquotedAssignment);
+}
+
+function isEnvironmentSourceAssignment(
+  input: string,
+  offset: number,
+  matchLength: number,
+  assignment: string,
+  assignedValue: string,
+): boolean {
+  const lineStart = Math.max(
+    input.lastIndexOf("\n", offset - 1),
+    input.lastIndexOf("\r", offset - 1),
+    input.lastIndexOf("\u2028", offset - 1),
+    input.lastIndexOf("\u2029", offset - 1),
+  );
+  const prefix = input.slice(lineStart + 1, offset);
+  const declaration = prefix.match(
+    /(?:^|[^$_\p{ID_Continue}])(const|let|var)[^\S\r\n\u2028\u2029]+$/u,
+  )?.[1];
+  return isSourceReferenceAssignment(
+    input,
+    offset,
+    matchLength,
+    "",
+    declaration ? `${declaration} ` : "",
+    assignment,
+    assignedValue,
+  );
 }
 
 function applyPatterns(value: string, patterns: MaskingPattern[]): string {

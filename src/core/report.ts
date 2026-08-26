@@ -146,7 +146,7 @@ function failedSection(failed: CheckResult[]): string[] {
     "",
     ...failed.map((entry) => `- **${entry.title}** ${entry.detail}`),
     "",
-    "Read the recorded command output and browser evidence before attributing any of this",
+    "Read the available evidence before attributing any of this",
     "to the documentation. A failure here is a fact about the run, not yet a finding.",
     "",
   ];

@@ -184,6 +184,8 @@ describe("renderReport", () => {
     const markdown = renderReport(record(results, "failed"));
     const failures = markdown.slice(markdown.indexOf("## Observed failures"));
     expect(failures).toContain("exit 1");
+    expect(failures).toContain("available evidence");
+    expect(failures).not.toContain("browser evidence");
     expect(markdown).toContain("## Unresolved checks");
     expect(markdown).toContain("does not mean the");
   });
