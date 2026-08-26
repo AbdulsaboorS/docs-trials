@@ -9,6 +9,10 @@ const sourceReferencePattern = new RegExp(
   `^(?:${identifier})(?:(?:\\.|\\?\\.)${identifier})*!?$`,
   "u",
 );
+const optionalComputedSourcePattern = new RegExp(
+  `^(?:${identifier})(?:(?:\\.|\\?\\.)${identifier})*\\?\\.$`,
+  "u",
+);
 const sourceDeclarationPattern = /^(?:const|let|var)[^\S\r\n\u2028\u2029]+$/;
 
 /**
@@ -165,8 +169,17 @@ function isSourceReferenceAssignment(
   assignment: string,
   assignedValue: string,
 ): boolean {
-  if (!sourceReferencePattern.test(assignedValue)) return false;
-  if (sourceDeclarationPattern.test(declaration)) return true;
+  const isSourceReference = sourceReferencePattern.test(assignedValue);
+  if (sourceDeclarationPattern.test(declaration)) {
+    if (isSourceReference) return true;
+    if (
+      optionalComputedSourcePattern.test(assignedValue) &&
+      /^\[[0-9]+\]/.test(input.slice(offset + matchLength))
+    ) {
+      return true;
+    }
+  }
+  if (!isSourceReference) return false;
 
   const lineStart = Math.max(
     input.lastIndexOf("\n", offset - 1),

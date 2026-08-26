@@ -38,6 +38,9 @@ describe("redact", () => {
     expect(redact("const token = config.token!;")).toBe("const token = config.token!;");
     expect(redact("const token = this.#token;")).toBe("const token = this.#token;");
     expect(redact("const token = données.jeton;")).toBe("const token = données.jeton;");
+    expect(
+      redact('const secret = secretMatch?.[1] || randomBytes(32).toString("base64url");'),
+    ).toBe('const secret = secretMatch?.[1] || randomBytes(32).toString("base64url");');
     expect(redact('var token = form.get\n("cf-turnstile-response");')).toBe(
       'var token = form.get\n("cf-turnstile-response");',
     );
