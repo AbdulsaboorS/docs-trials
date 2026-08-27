@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import jsTokens from "js-tokens";
 import { z, type JSONType } from "zod";
 
 const secretKey =
@@ -13,6 +15,16 @@ const sourceReferencePattern = new RegExp(
 const optionalComputedSourcePattern = new RegExp(
   `^(?:${identifier})(?:(?:\\.|\\?\\.)${identifier})*\\?\\.$`,
   "u",
+);
+const randomByteGenerator = `(?:randomBytes|crypto\\.randomBytes)${sameLineWhitespace}\\(${sameLineWhitespace}[1-9][0-9]*${sameLineWhitespace}\\)\\.toString${sameLineWhitespace}\\(${sameLineWhitespace}["'](?:base64|base64url|hex)["']${sameLineWhitespace}\\)`;
+const randomUuidGenerator = `(?:randomUUID|crypto\\.randomUUID)${sameLineWhitespace}\\(${sameLineWhitespace}\\)`;
+const safeEnvironmentSourcePattern = new RegExp(
+  `^[+-]?${sameLineWhitespace}(?:process|import\\.meta)\\.env\\.${environmentSecretKey}${sameLineWhitespace}=${sameLineWhitespace}(?:${randomByteGenerator}|${randomUuidGenerator});?${sameLineWhitespace}(?=//|\\r?$)`,
+  "gmu",
+);
+const environmentMemberLiteralPattern = new RegExp(
+  `((?<![$_\\p{ID_Continue}])(?:(?:${identifier})\\.)+${environmentSecretKey}${sameLineWhitespace}=${sameLineWhitespace})(?!\\[REDACTED\\])([^\\s\\\\"'\\x60;&|<>[\\](){},]+)(?=${sameLineWhitespace}(?:;|//|$))`,
+  "gmu",
 );
 const sourceDeclarationPattern = /^(?:const|let|var)[^\S\r\n\u2028\u2029]+$/;
 
@@ -77,8 +89,8 @@ const unquotedAssignmentPattern = new RegExp(
 );
 
 const environmentAssignmentPattern = new RegExp(
-  `(\\b${environmentSecretKey}${sameLineWhitespace}=${sameLineWhitespace})(?!\\[REDACTED\\])([^\\s\\\\"'\\x60;&|<>[\\]]+)`,
-  "g",
+  `(^|[\\s,{+"'-]|--)(\\b${environmentSecretKey}${sameLineWhitespace}=${sameLineWhitespace})(?!\\[REDACTED\\])([^\\s\\\\"'\\x60;&|<>[\\]]+)`,
+  "gm",
 );
 
 const patternsAfterUnquotedAssignment: MaskingPattern[] = [
@@ -139,7 +151,26 @@ export function knownPrefixes(): string {
 }
 
 export function redact(value: string): string {
-  const before = applyPatterns(value, patternsBeforeUnquotedAssignment);
+  const preservedSources: string[] = [];
+  const regexRanges = findClosedRegexRanges(value);
+  let marker = "";
+  safeEnvironmentSourcePattern.lastIndex = 0;
+  if (regexRanges.length > 0 || safeEnvironmentSourcePattern.test(value)) {
+    do marker = `[DOCS_TRIALS_PRESERVED:${randomUUID()}]`;
+    while (value.includes(marker));
+    safeEnvironmentSourcePattern.lastIndex = 0;
+  }
+  const regexProtected = marker
+    ? protectRanges(value, regexRanges, marker, preservedSources)
+    : value;
+  const protectedValue = marker
+    ? regexProtected.replace(safeEnvironmentSourcePattern, (source) => {
+        const token = `${marker}${preservedSources.length}${marker}`;
+        preservedSources.push(source);
+        return token;
+      })
+    : value;
+  const before = applyPatterns(protectedValue, patternsBeforeUnquotedAssignment);
   const unquoted = before.replace(
     unquotedAssignmentPattern,
     (
@@ -163,14 +194,115 @@ export function redact(value: string): string {
         ? match
         : `${boundary}${declaration}${assignment}[REDACTED]`,
   );
-  const environmentRedacted = unquoted.replace(
-    environmentAssignmentPattern,
-    (match, assignment: string, assignedValue: string, offset: number, input: string) =>
-      isEnvironmentSourceAssignment(input, offset, match.length, assignment, assignedValue)
+  const literalRanges = findSourceLiteralRanges(unquoted);
+  let literalRangeIndex = 0;
+  const memberLiteralRedacted = unquoted.replace(
+    environmentMemberLiteralPattern,
+    (match, assignment: string, assignedValue: string, offset: number) => {
+      let range = literalRanges[literalRangeIndex];
+      while (range !== undefined && range[1] <= offset) {
+        literalRangeIndex += 1;
+        range = literalRanges[literalRangeIndex];
+      }
+      const insideLiteral = range !== undefined && range[0] <= offset && offset < range[1];
+      return insideLiteral ||
+        (assignedValue.includes(".") && sourceReferencePattern.test(assignedValue))
         ? match
-        : `${assignment}[REDACTED]`,
+        : `${assignment}[REDACTED]`;
+    },
   );
-  return applyPatterns(environmentRedacted, patternsAfterUnquotedAssignment);
+  const environmentRedacted = memberLiteralRedacted.replace(
+    environmentAssignmentPattern,
+    (
+      match,
+      boundary: string,
+      assignment: string,
+      assignedValue: string,
+      offset: number,
+      input: string,
+    ) =>
+      isEnvironmentSourceAssignment(
+        input,
+        offset + boundary.length,
+        match.length - boundary.length,
+        assignment,
+        assignedValue,
+      )
+        ? match
+        : `${boundary}${assignment}[REDACTED]`,
+  );
+  return restorePreservedSources(
+    applyPatterns(environmentRedacted, patternsAfterUnquotedAssignment),
+    marker,
+    preservedSources,
+  );
+}
+
+function restorePreservedSources(value: string, marker: string, sources: string[]) {
+  if (sources.length === 0) return value;
+  const restored: string[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const markerStart = value.indexOf(marker, cursor);
+    if (markerStart < 0) break;
+    const indexStart = markerStart + marker.length;
+    const markerEnd = value.indexOf(marker, indexStart);
+    if (markerEnd < 0) break;
+    const source = sources[Number(value.slice(indexStart, markerEnd))];
+    if (source === undefined) break;
+    restored.push(value.slice(cursor, markerStart), source);
+    cursor = markerEnd + marker.length;
+  }
+  restored.push(value.slice(cursor));
+  return restored.join("");
+}
+
+function protectRanges(
+  value: string,
+  ranges: Array<readonly [number, number]>,
+  marker: string,
+  preservedSources: string[],
+): string {
+  const protectedParts: string[] = [];
+  let cursor = 0;
+  for (const [start, end] of ranges) {
+    protectedParts.push(value.slice(cursor, start));
+    protectedParts.push(`${marker}${preservedSources.length}${marker}`);
+    preservedSources.push(value.slice(start, end));
+    cursor = end;
+  }
+  protectedParts.push(value.slice(cursor));
+  return protectedParts.join("");
+}
+
+function findSourceLiteralRanges(input: string): Array<readonly [number, number]> {
+  const ranges: Array<readonly [number, number]> = [];
+  let offset = 0;
+  for (const token of jsTokens(input)) {
+    const end = offset + token.value.length;
+    if (
+      token.type === "StringLiteral" ||
+      token.type === "NoSubstitutionTemplate" ||
+      token.type === "TemplateHead" ||
+      token.type === "TemplateMiddle" ||
+      token.type === "TemplateTail"
+    ) {
+      ranges.push([offset, end]);
+    }
+    offset = end;
+  }
+  return ranges;
+}
+
+function findClosedRegexRanges(input: string): Array<readonly [number, number]> {
+  const ranges: Array<readonly [number, number]> = [];
+  let offset = 0;
+  for (const token of jsTokens(input)) {
+    const end = offset + token.value.length;
+    if (token.type === "RegularExpressionLiteral" && token.closed) ranges.push([offset, end]);
+    offset = end;
+  }
+  return ranges;
 }
 
 function isEnvironmentSourceAssignment(

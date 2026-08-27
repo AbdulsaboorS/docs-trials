@@ -33,12 +33,17 @@ page is blank. Only a browser catches it.
 
 ## Install
 
+The package is not published yet. After the first public release, install the
+CLI and its matching Chromium build with:
+
 ```sh
 npm install -g docs-trials
-npx playwright install chromium
+docs-trials install-browser
 ```
 
-Node 22 or later.
+Node 22 or later on macOS or Linux.
+On Linux, browser setup can request administrator access to install Chromium's
+system dependencies.
 
 ## Use
 

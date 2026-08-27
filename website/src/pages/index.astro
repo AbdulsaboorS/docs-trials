@@ -1,0 +1,209 @@
+---
+import Base from "../layouts/Base.astro";
+
+const checks = [
+  ["install", "Dependencies install"],
+  ["build", "Project builds"],
+  ["boot", "Server answers"],
+  ["page load", "Entry page loads"],
+  ["visible content", "Something meaningful renders"],
+  ["application errors", "No uncaught or console error"],
+  ["resource loads", "Same-origin assets load"],
+  ["server errors", "No observed 5xx response"],
+  ["client secrets", "Complete same-origin responses contain no detected secret"],
+  ["network egress", "External origins match the allowlist"],
+];
+---
+
+<Base
+  title="Docs Trials — Can an agent actually build from your docs?"
+  description="Run a coding agent against your documentation, verify the application it builds, and keep evidence you can inspect."
+>
+  <section class="hero shell">
+    <div class="hero-copy">
+      <p class="kicker"><span>Local CLI</span> Evidence before opinions</p>
+      <h1>Can an agent actually build from your docs?</h1>
+      <p class="lede">
+        Give a coding agent your documentation and a disposable starter app. Docs Trials freezes the
+        inputs, runs deterministic checks against what the agent builds, and writes a local report
+        with evidence references.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="/report/">View a report summary</a>
+        <a class="button text" href="#install">Release status <span aria-hidden="true">↓</span></a>
+      </div>
+      <ul class="hero-facts" aria-label="Product facts">
+        <li>Runs on your machine</li>
+        <li>No model grades itself</li>
+        <li>No overall score</li>
+      </ul>
+    </div>
+
+    <div class="terminal-wrap" role="region" aria-label="Excerpt from a local Docs Trials report">
+      <div class="terminal-label">Observed, not inferred</div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span>AX.md</span>
+          <span>real attempt</span>
+        </div>
+        <p class="terminal-status">BASELINE PASSED</p>
+        <p class="terminal-warning">Task fulfillment was not verified.</p>
+        <div class="terminal-rule"></div>
+        <p><b>PASS</b> Dependencies install successfully.</p>
+        <p><b>PASS</b> The application answers HTTP 200.</p>
+        <p><b>PASS</b> The entry page renders visible text.</p>
+        <p><b>PASS</b> No application console error occurs.</p>
+        <p><b>PASS</b> External origins match the allowlist.</p>
+        <div class="terminal-rule"></div>
+        <p class="terminal-meta">9 passed · 0 failed · 0 inconclusive</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="proof-strip" aria-label="Product position">
+    <p>A successful build is not a working integration.</p>
+    <p>A browser observation is not proof of task completion.</p>
+    <p>A failed check is not automatically a documentation finding.</p>
+  </section>
+
+  <section class="method shell section" id="method">
+    <header class="section-heading">
+      <p class="kicker">The method</p>
+      <h2>One frozen trial. One real build. Evidence for every result.</h2>
+    </header>
+    <ol class="method-grid">
+      <li>
+        <span class="step-number">01</span>
+        <h3>Freeze the trial</h3>
+        <p>
+          Record the task, documentation snapshots, commands, allowlists, agent, and starter
+          revision.
+        </p>
+        <code>docs-trials prepare</code>
+      </li>
+      <li>
+        <span class="step-number">02</span>
+        <h3>Let the agent build</h3>
+        <p>Give the generated instructions to your coding agent in a disposable workspace.</p>
+        <code>AGENT_INSTRUCTIONS.md</code>
+      </li>
+      <li>
+        <span class="step-number">03</span>
+        <h3>Verify the result</h3>
+        <p>
+          Install, build, boot, and observe the application in Chromium with deterministic checks.
+        </p>
+        <code>docs-trials verify latest</code>
+      </li>
+    </ol>
+  </section>
+
+  <section class="report-feature shell section">
+    <div>
+      <p class="kicker">A report, not a score</p>
+      <h2>The local report links results to retained evidence.</h2>
+      <p>
+        The report names what ran, what the browser observed, what remained unresolved, and which
+        author goals were not graded. Retained command and browser observations stay beside it.
+      </p>
+      <a class="inline-link" href="/report/">View the sanitized summary <span>→</span></a>
+    </div>
+    <dl class="report-ledger">
+      <div><dt>Outcome</dt><dd class="pass-text">Baseline passed</dd></div>
+      <div><dt>Checks</dt><dd>9 / 9 passed</dd></div>
+      <div><dt>Agent</dt><dd>OpenCode · gpt-5.6-sol</dd></div>
+      <div><dt>Evidence</dt><dd>Install · boot · browser · source diff</dd></div>
+      <div><dt>Task goals</dt><dd>Recorded, not verified</dd></div>
+    </dl>
+  </section>
+
+  <section class="checks section" id="checks">
+    <div class="shell checks-layout">
+      <header class="section-heading sticky-heading">
+        <p class="kicker">Deterministic baseline</p>
+        <h2>Ten checks. No model verdict.</h2>
+        <p>
+          Checks apply only when their lifecycle step exists. Missing evidence and infrastructure
+          trouble are inconclusive, never silently passed.
+        </p>
+      </header>
+      <ol class="check-list">
+        {
+          checks.map(([name, description], index) => (
+            <li>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <strong>{name}</strong>
+              <p>{description}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="limits shell section">
+    <div class="limits-title">
+      <p class="kicker">The honesty clause</p>
+      <h2>What Docs Trials refuses to claim</h2>
+    </div>
+    <div class="limits-list">
+      <article>
+        <h3>“The task is complete.”</h3>
+        <p>
+          The baseline checks mechanical web health. Author goals remain visible and explicitly
+          ungraded.
+        </p>
+      </article>
+      <article>
+        <h3>“The docs caused this.”</h3>
+        <p>
+          A failed attempt becomes a documentation finding only after evidence supports that
+          attribution.
+        </p>
+      </article>
+      <article>
+        <h3>“This agent is better.”</h3>
+        <p>One stochastic attempt is a diagnostic observation, not a benchmark or leaderboard.</p>
+      </article>
+      <article>
+        <h3>“Your machine is isolated.”</h3>
+        <p>
+          Commands run as your user. Use disposable workspaces and remove credentials before
+          starting.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="install section" id="install">
+    <div class="shell install-grid">
+      <div>
+        <p class="kicker inverse">Pre-release</p>
+        <h2>Installation is not public yet.</h2>
+        <p>
+          The npm package has not been published. Release validation is in progress, and nothing is
+          uploaded automatically.
+        </p>
+      </div>
+      <div class="code-window">
+        <div><span>01</span><code>Gate 2 replacement attempts pending</code></div>
+        <div><span>02</span><code>npm publication pending</code></div>
+        <div><span>03</span><code>Public installation instructions pending</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing shell section">
+    <p class="closing-mark" aria-hidden="true">DT / 00</p>
+    <h2>Test the documentation by building from it.</h2>
+    <div>
+      <p>
+        Keep the inputs frozen. Keep the verdict deterministic. Keep every public claim
+        reproducible.
+      </p>
+      <a class="button primary" href="https://github.com/AbdulsaboorS/docs-trials"
+        >View the source</a
+      >
+    </div>
+  </section>
+</Base>

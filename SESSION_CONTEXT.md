@@ -1,41 +1,45 @@
 # Session Context
 
-Updated: 2026-08-22
+Updated: 2026-08-27
 
 Replace this handoff after substantial work. Never exceed 50 lines.
 
 ## Last Session Summary
 
-- Release-candidate hardening is committed and pushed. `c33defc` is the final verifier change; `93dd853` updates only this handoff.
-- Browser capture remains fail-closed for missing, partial, truncated, skipped, undecodable, or unbounded evidence.
-- Paused response streaming uses a bounded continuation handshake and retains the original stream operation after the response is released.
-- If stream activation loses the loading race, capture reads the completed body from the existing bounded CDP Network buffer. Missing or evicted bodies remain inconclusive.
-- Capture fault evidence now identifies the bounded, redacted response URL.
-- Git fixture commits carry command-scoped identity and no longer depend on developer or runner configuration.
-- Verification and recovery locks remain ownership-aware, and stale outputs and unreferenced evidence are rejected.
-- CI covers Linux Node 22, 24, and 26 plus macOS Node 24. Linux Node 24 also runs static, Vite, Astro, and Next.js trials.
-- Local validation passed: lint, format, typecheck, build, 203 tests, `git diff --check`, a real static trial, and the four-framework matrix.
-- GitHub Actions runs `32592389898` and `32592624296` passed all four jobs, including the framework matrix. `main` is clean and synchronized with `origin/main`.
+- Gate 2 remains incomplete. The ten attempts at verifier revision `d434374` are invalid because Better Auth A evidence was corrupted; details remain in `~/.docs-trials/gate-2-d434374/LEDGER.md`.
+- The uncommitted redaction fix now preserves the exact recognized random generator source that triggered the defect.
+- Direct quoted and unquoted secret literals are still masked. Unsupported source expressions remain unchanged instead of being partially rewritten.
+- Adversarial regressions cover comments, strings, regex text, computed access, member properties, long inputs, and the original Better Auth line.
+- `docs-trials install-browser` resolves `cli.js` through Playwright's exported package metadata. Linux also requests Playwright system dependencies.
+- The resolved Playwright CLI is executed in tests. The installed five-file tarball also ran `docs-trials install-browser` successfully from a fresh temporary prefix.
+- Package validation explicitly rebuilds, ignores inherited pack dry-run state, installs the tarball, and preserves unrelated files in `release/`.
+- Direct `npm publish` is blocked. `pnpm release:publish` validates and publishes only the retained tarball; its dry run listed exactly five files.
+- The static Astro site remains a pre-release visual summary. It states that Gate 2 and published evidence are incomplete and labels live documentation links as attribution sources.
+- CI now package-checks Linux and macOS Node 22, checks/builds the site on Linux Node 24, and runs a non-uploading Wrangler deployment dry run.
+- Final independent review found no actionable code defect or release-blocking code finding.
+- Local validation passed: lint, format check, typecheck, build, 213 tests, package install, publication dry run, Astro check/build, Wrangler dry run with eight assets, desktop/mobile Chromium checks, and `git diff --check`.
+- One resource-load test was transiently inconclusive during a concurrent validation run. It passed in isolation, ten repeated runs, and the clean full rerun; no reproducible cause justified a code change.
+- No commit, npm publication, or website deployment was made.
 
 ## Next Session Work
 
-1. Treat verifier revision `c33defc` as frozen unless Gate 2 exposes a verifier defect.
-2. Choose the Gate 2 roster: six documentation products, four repeated with a second agent product, covering static HTML, Vite, Astro, and one server-rendered framework.
-3. Run ten real unsteered attempts with a fixed environment within each repeated pair.
-4. Read every report and retained evidence; record only observations the tool produced. A verifier fix invalidates affected attempts.
+1. Review the proposed commit boundaries and commit only with explicit approval: redaction; package/CLI; website/workspace; CI; handoff.
+2. After commits are pushed, require all new GitHub Actions jobs to pass and record the frozen verifier revision and artifact hashes.
+3. Rerun all ten fresh Gate 2 attempts against that one frozen revision when the operator is ready.
+4. Replace the visual summary with a real sanitized evidence-bearing sample before public release.
+5. Do not publish npm or deploy the site without explicit approval after Gate 2 succeeds.
 
 ## Required Files
 
 - `AGENTS.md`, `CONTEXT.md`, `docs/PRODUCT.md`, and `SESSION_CONTEXT.md`
-- `src/checks/content.ts`, `src/checks/page.ts`, and `src/checks/index.ts`
-- `src/core/run.ts`, `src/commands/recover.ts`, and `src/commands/verify.ts`
-- `tests/content.test.ts`, `tests/baseline.test.ts`, `tests/run.test.ts`, and `tests/verify.test.ts`
-- `.github/workflows/ci.yml`, `scripts/run-framework-trials.mjs`, and `fixtures/frameworks/`
+- `src/core/redact.ts`, `tests/redact.test.ts`, `src/browser.ts`, `src/cli.ts`, and `src/checks/page.ts`
+- `package.json`, `build.mjs`, `scripts/check-package.mjs`, `scripts/publish-package.mjs`, and `.github/workflows/ci.yml`
+- `website/`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, and formatter/linter configuration
+- `~/.docs-trials/gate-2-d434374/LEDGER.md`
 
 ## Blockers
 
-- The six documentation products, repeated pairs, subject agents, and disposable starter workspaces have not been selected.
-- npm `docs-trials` is not published or reserved.
-- Execution remains local and unsandboxed by the fixed v0 design.
-- PID reuse can conservatively block automatic stale-lock recovery; inspect the owner rather than risking an active verifier.
-- `pnpm/action-setup@v4` emits a Node 20 deprecation warning under Actions but does not fail CI.
+- All release changes are uncommitted; there is no frozen replacement verifier revision.
+- Gate 2 needs ten fresh attempts against the eventual revision.
+- npm publication requires authentication, successful Gate 2 evidence, and explicit approval.
+- Production deployment requires successful Gate 2 evidence and explicit approval.

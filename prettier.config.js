@@ -1,1 +1,7 @@
-export default { printWidth: 100, semi: true, singleQuote: false, trailingComma: "all" };
+export default {
+  plugins: ["prettier-plugin-astro"],
+  printWidth: 100,
+  semi: true,
+  singleQuote: false,
+  trailingComma: "all",
+};

@@ -1,2 +1,6 @@
+packages:
+  - website
+
 allowBuilds:
   esbuild: true
+  workerd: true

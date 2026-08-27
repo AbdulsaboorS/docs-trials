@@ -54,7 +54,7 @@ export async function observePage(
   } catch (error) {
     return {
       available: false,
-      detail: `Could not start Chromium: ${message(error)}. Install it with \`npx playwright install chromium\`.`,
+      detail: `Could not start Chromium: ${message(error)}. Install it with \`docs-trials install-browser\`.`,
     };
   }
 

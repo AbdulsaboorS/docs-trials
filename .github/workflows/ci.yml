@@ -40,9 +40,15 @@ jobs:
       - run: node dist/cli.js --help
       - if: matrix.node == 24
         run: node scripts/run-framework-trials.mjs
+      - if: matrix.node == 22
+        run: pnpm package:check
+      - if: matrix.node == 24
+        run: pnpm --filter docs-trials-site check && pnpm --filter docs-trials-site build
+      - if: matrix.node == 24
+        run: pnpm --filter docs-trials-site exec wrangler deploy --dry-run
 
   macos:
-    name: macOS / Node 24
+    name: macOS / Node 22
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -50,9 +56,10 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium chromium-headless-shell
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm package:check

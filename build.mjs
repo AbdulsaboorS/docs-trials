@@ -1,8 +1,9 @@
-import { chmod } from "node:fs/promises";
+import { chmod, rm } from "node:fs/promises";
 import { build } from "esbuild";
 
 // A single-file bundle keeps CLI startup fast and removes ESM path-resolution
 // differences between the source tree and the published package.
+await rm("dist", { recursive: true, force: true });
 await build({
   entryPoints: ["src/cli.ts"],
   outfile: "dist/cli.js",
@@ -11,7 +12,7 @@ await build({
   target: "node22",
   format: "esm",
   sourcemap: true,
-  external: ["playwright"],
+  external: ["playwright", "zod"],
   logLevel: "info",
 });
 

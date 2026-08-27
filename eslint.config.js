@@ -4,7 +4,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/", "node_modules/", "fixtures/", "coverage/", "tools/oxlint/anti-slop/"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "fixtures/",
+      "coverage/",
+      "tools/oxlint/anti-slop/",
+      "website/.astro/",
+      "website/dist/",
+    ],
   },
   eslint.configs.recommended,
   tseslint.configs.recommended,

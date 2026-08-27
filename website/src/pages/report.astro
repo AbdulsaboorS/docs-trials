@@ -1,0 +1,186 @@
+---
+import Base from "../layouts/Base.astro";
+
+const results = [
+  ["Dependencies install successfully.", "Dependency installation completed in 1s."],
+  [
+    "The application starts and answers an HTTP request.",
+    "http://127.0.0.1:4311 answered with HTTP 200.",
+  ],
+  [
+    "The entry page loads without an HTTP or navigation error.",
+    'The entry page returned HTTP 200 with title "Contact us".',
+  ],
+  ["The page renders visible content.", "The page rendered visible text."],
+  ["No uncaught or application console error occurs.", "No uncaught or application console error."],
+  ["Same-origin browser assets load successfully.", "Same-origin browser assets loaded."],
+  ["No request returns a 5xx response.", "No response returned a 5xx status."],
+  [
+    "Captured same-origin browser content contains no detected secret.",
+    "No credential-shaped value in 1 complete same-origin response (4105 bytes).",
+  ],
+  [
+    "The page contacts no unexpected external origin.",
+    "The page contacted only the declared Turnstile origin.",
+  ],
+];
+---
+
+<Base
+  title="Sanitized attempt summary — Docs Trials"
+  description="A visual summary of a sanitized Docs Trials Turnstile contact-form attempt."
+>
+  <article class="report-page shell">
+    <a class="back-link" href="/">← Back to docs-trials</a>
+    <header class="report-header">
+      <div>
+        <p class="kicker">Real local attempt · visual summary</p>
+        <h1>Attempt Summary</h1>
+      </div>
+      <div class="outcome-stamp">
+        <span>Baseline</span>
+        <strong>Passed</strong>
+      </div>
+    </header>
+
+    <div class="report-caveat">
+      <strong>Task fulfillment was not verified.</strong>
+      <p>
+        This report records deterministic baseline observations. It is not a task-completion
+        certificate.
+      </p>
+    </div>
+
+    <p class="report-summary-note">
+      <strong>Pre-release visual summary.</strong> Gate 2 is incomplete. This page transcribes selected
+      fields from a sanitized local report, but the retained evidence bundle is not published here. This
+      page is not release-validation evidence, and readers cannot independently inspect its result references.
+    </p>
+
+    <dl class="report-meta">
+      <div><dt>Trial</dt><dd>Turnstile contact form A</dd></div>
+      <div><dt>Attempt</dt><dd><code>gate2-turnstile-a-20260826-175322-635</code></dd></div>
+      <div><dt>Checks</dt><dd>9 passed · 0 failed · 0 inconclusive</dd></div>
+      <div><dt>Agent</dt><dd>OpenCode · openai/gpt-5.6-sol</dd></div>
+      <div><dt>Starter revision</dt><dd><code>1ebd1647e17e</code></dd></div>
+      <div><dt>Manifest digest</dt><dd><code>8474d77f2835d7cd</code></dd></div>
+    </dl>
+
+    <section class="report-section">
+      <p class="report-section-number">01 / Task</p>
+      <h2>What the subject agent was asked to build</h2>
+      <p class="report-task">
+        Using only the supplied documentation for Turnstile, replace the static starter page with a
+        contact form protected by the published always-pass test keys. Validate submitted tokens
+        server-side before accepting a contact submission. Keep the form at the entry URL.
+      </p>
+    </section>
+
+    <section class="report-section">
+      <p class="report-section-number">02 / Supplied documentation</p>
+      <h2>Frozen trial copies and live attribution sources</h2>
+      <ul class="document-list">
+        <li>
+          <span>01</span><a
+            href="https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/"
+            >Embed the Turnstile widget</a
+          ><small
+            >Live source (attribution only) · Trial copy frozen as Markdown · SHA-256 recorded</small
+          >
+        </li>
+        <li>
+          <span>02</span><a
+            href="https://developers.cloudflare.com/turnstile/troubleshooting/testing/"
+            >Turnstile testing keys</a
+          ><small
+            >Live source (attribution only) · Trial copy frozen as Markdown · SHA-256 recorded</small
+          >
+        </li>
+        <li>
+          <span>03</span><a
+            href="https://developers.cloudflare.com/turnstile/get-started/server-side-validation/"
+            >Server-side validation</a
+          ><small
+            >Live source (attribution only) · Trial copy frozen as Markdown · SHA-256 recorded</small
+          >
+        </li>
+      </ul>
+    </section>
+
+    <section class="report-section">
+      <p class="report-section-number">03 / Baseline checks</p>
+      <h2 id="baseline-results-heading">These are the only results Docs Trials produced.</h2>
+      <div
+        class="result-table-wrap"
+        role="region"
+        tabindex="0"
+        aria-labelledby="baseline-results-heading"
+      >
+        <table class="result-table">
+          <caption>Baseline check results</caption>
+          <thead>
+            <tr>
+              <th scope="col">No.</th>
+              <th scope="col">Outcome</th>
+              <th scope="col">Check</th>
+              <th scope="col">Observed detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              results.map(([check, detail], index) => (
+                <tr>
+                  <td class="result-index">{String(index + 1).padStart(2, "0")}</td>
+                  <td class="result-badge">Pass</td>
+                  <th class="result-check" scope="row">
+                    {check}
+                  </th>
+                  <td class="result-detail">{detail}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="report-split report-section">
+      <div>
+        <p class="report-section-number">04 / Omitted</p>
+        <h2>Build check</h2>
+        <p>
+          The manifest declared no build command. The check did not apply and received no outcome.
+        </p>
+      </div>
+      <div>
+        <p class="report-section-number">05 / Ungraded</p>
+        <h2>Source changes</h2>
+        <p>
+          Git-visible changes were retained as evidence. Git-ignored workspace paths were excluded.
+        </p>
+      </div>
+    </section>
+
+    <section class="goals-section report-section">
+      <p class="report-section-number">06 / Author goals</p>
+      <h2>Recorded for context. Not verified.</h2>
+      <ul>
+        <li>The contact page displays a visible Turnstile test widget.</li>
+        <li>The server rejects a submission without a valid Turnstile token.</li>
+        <li>The published always-pass test key pair can complete a submission.</li>
+      </ul>
+      <p class="goals-note">These statements did not change any baseline result.</p>
+    </section>
+
+    <aside class="report-reading">
+      <h2>How to read this report</h2>
+      <p><strong>Pass</strong> means Docs Trials observed the behavior named by that check.</p>
+      <p><strong>Fail</strong> means the observation contradicted the check.</p>
+      <p><strong>Inconclusive</strong> means there was not enough evidence to decide.</p>
+      <p>
+        The baseline does not prove that the application fulfills the task or that documentation
+        caused an outcome.
+      </p>
+    </aside>
+  </article>
+</Base>

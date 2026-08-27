@@ -1,0 +1,19 @@
+{
+  "name": "docs-trials-site",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "astro build",
+    "check": "astro check",
+    "deploy": "pnpm build && wrangler deploy",
+    "dev": "astro dev",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "astro": "^7.2.7",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.126.0"
+  }
+}

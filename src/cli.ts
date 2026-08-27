@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { relative } from "node:path";
 import { ZodError } from "zod";
+import { installBrowser } from "./browser";
 import { init } from "./commands/init";
 import { prepare } from "./commands/prepare";
 import { recover } from "./commands/recover";
@@ -13,6 +14,7 @@ const usage = `docs-trials — check whether an agent can build from your docume
 
 Usage
   docs-trials init [path]              Write a starter trial.json
+  docs-trials install-browser          Install the matching Chromium build
   docs-trials prepare [options]        Freeze the task and print agent instructions
   docs-trials verify [run]             Run the baseline checks and write AX.md
   docs-trials recover [run] [--force]  Remove locks left by a stopped verifier
@@ -38,6 +40,9 @@ async function main(argv: string[]): Promise<number> {
   }
 
   switch (args.command) {
+    case "install-browser":
+      return installBrowser();
+
     case "init": {
       const created = await init({
         path: args.positional[0] ?? args.options.manifest ?? "trial.json",

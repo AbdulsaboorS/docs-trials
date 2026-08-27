@@ -42,6 +42,164 @@ describe("redact", () => {
     expect(redact("const API_SECRET=secretMatch?.[1] || fallback;")).toBe(
       "const API_SECRET=secretMatch?.[1] || fallback;",
     );
+    expect(redact('+  process.env.BETTER_AUTH_SECRET = randomBytes(32).toString("base64");')).toBe(
+      '+  process.env.BETTER_AUTH_SECRET = randomBytes(32).toString("base64");',
+    );
+    expect(redact('process.env.API_SECRET = randomBytes (32).toString("base64");')).toBe(
+      'process.env.API_SECRET = randomBytes (32).toString("base64");',
+    );
+    expect(redact("import.meta.env.API_SECRET = crypto.randomUUID();")).toBe(
+      "import.meta.env.API_SECRET = crypto.randomUUID();",
+    );
+    expect(redact("process.env.API_SECRET = randomUUID();")).toBe(
+      "process.env.API_SECRET = randomUUID();",
+    );
+    expect(redact("process.env.API_SECRET = config.apiSecret;")).toBe(
+      "process.env.API_SECRET = config.apiSecret;",
+    );
+    expect(redact("process.env.API_SECRET = hunter2;")).toBe(
+      "process.env.API_SECRET = [REDACTED];",
+    );
+    expect(redact("config.API_SECRET = hunter2;")).toBe("config.API_SECRET = [REDACTED];");
+    expect(redact("process.env.API_SECRET = abc/def;")).toBe(
+      "process.env.API_SECRET = [REDACTED];",
+    );
+    expect(redact("process.env.API_SECRET = abc:def;")).toBe(
+      "process.env.API_SECRET = [REDACTED];",
+    );
+    expect(redact("process.env.API_SECRET = abc%def;")).toBe(
+      "process.env.API_SECRET = [REDACTED];",
+    );
+    expect(redact("process.env.API_SECRET = hunter2(callback);")).toBe(
+      "process.env.API_SECRET = hunter2(callback);",
+    );
+    expect(redact("myprocess.env.API_SECRET = config.apiSecret;")).toBe(
+      "myprocess.env.API_SECRET = config.apiSecret;",
+    );
+    expect(redact("foo.process.env.API_SECRET = abc.def;")).toBe(
+      "foo.process.env.API_SECRET = abc.def;",
+    );
+    expect(
+      redact('process.env.API_SECRET = randomBytes(32).toString("base64"); // generated'),
+    ).toBe('process.env.API_SECRET = randomBytes(32).toString("base64"); // generated');
+    expect(
+      redact('process.env.API_SECRET = randomBytes(32).toString("base64") /* generated */;'),
+    ).toBe('process.env.API_SECRET = randomBytes(32).toString("base64") /* generated */;');
+    expect(redact("process.env.API_SECRET = crypto.randomUUID(); // password=hunter2")).toBe(
+      "process.env.API_SECRET = crypto.randomUUID(); // password=[REDACTED]",
+    );
+    expect(redact('foo.process.env.API_SECRET = randomBytes(32).toString("base64");')).toBe(
+      'foo.process.env.API_SECRET = randomBytes(32).toString("base64");',
+    );
+    expect(redact('process.env.API_SECRET = crypto.randomUUID("base64");')).toBe(
+      'process.env.API_SECRET = crypto.randomUUID("base64");',
+    );
+    expect(redact('process.env.API_SECRET = randomBytes(\r\n  32).toString("base64");')).toBe(
+      'process.env.API_SECRET = randomBytes(\r\n  32).toString("base64");',
+    );
+    expect(
+      redact('process.env.API_SECRET = require("node:crypto").randomBytes(32).toString("hex");'),
+    ).toBe('process.env.API_SECRET = require("node:crypto").randomBytes(32).toString("hex");');
+    expect(
+      redact('process.env.API_SECRET = randomBytes(32).toString("base64") satisfies string;'),
+    ).toBe('process.env.API_SECRET = randomBytes(32).toString("base64") satisfies string;');
+    expect(redact('const code = "process.env.API_SECRET = hunter2";')).toBe(
+      'const code = "process.env.API_SECRET = hunter2";',
+    );
+    expect(redact('const code = "process.env.API_SECRET = hunter2;";')).toBe(
+      'const code = "process.env.API_SECRET = hunter2;";',
+    );
+    expect(redact("const code = ' process.env.API_SECRET = hunter2;';")).toBe(
+      "const code = ' process.env.API_SECRET = hunter2;';",
+    );
+    expect(redact("process.env.API_SECRET = /hunter2;stillsecret/;")).toBe(
+      "process.env.API_SECRET = /hunter2;stillsecret/;",
+    );
+    expect(redact("const pattern = / password=hunter2;/;")).toBe(
+      "const pattern = / password=hunter2;/;",
+    );
+    expect(redact('const pattern = / password="hunter2";/;')).toBe(
+      'const pattern = / password="hunter2";/;',
+    );
+    expect(redact("const pattern = / token=`abc123`;/;")).toBe(
+      "const pattern = / token=`abc123`;/;",
+    );
+    expect(redact("process.env.API_SECRET = /actual-secret;")).toBe(
+      "process.env.API_SECRET = [REDACTED];",
+    );
+    expect(redact("process.env.API_SECRET = /srv/credential;")).toBe(
+      "process.env.API_SECRET = /srv/credential;",
+    );
+    expect(redact("/* process.env.API_SECRET = hunter2; */")).toBe(
+      "/* process.env.API_SECRET = [REDACTED]; */",
+    );
+    expect(redact("// don't expose process.env.API_SECRET = abc/def;")).toBe(
+      "// don't expose process.env.API_SECRET = [REDACTED];",
+    );
+    expect(redact('const pattern = /"/; process.env.API_SECRET = abc/def;')).toBe(
+      'const pattern = /"/; process.env.API_SECRET = [REDACTED];',
+    );
+    expect(redact("const code = `\nprocess.env.API_SECRET = abc/def;\n`;")).toBe(
+      "const code = `\nprocess.env.API_SECRET = abc/def;\n`;",
+    );
+    expect(redact("const code = `${process.env.API_SECRET = abc/def;}`;")).toBe(
+      "const code = `${process.env.API_SECRET = [REDACTED];}`;",
+    );
+    expect(redact("/* don't expose\n*/ process.env.API_SECRET = abc/def;")).toBe(
+      "/* don't expose\n*/ process.env.API_SECRET = [REDACTED];",
+    );
+    expect(redact('process.env["API_SECRET"] = getSecret("actual-secret");')).toBe(
+      'process.env["API_SECRET"] = getSecret("actual-secret");',
+    );
+    expect(redact('process["env"].API_SECRET = getSecret("actual-secret");')).toBe(
+      'process["env"].API_SECRET = getSecret("actual-secret");',
+    );
+    expect(
+      redact(
+        "process.env.API_SECRET = crypto.randomUUID();\nimport.meta.env.API_TOKEN = crypto.randomUUID();",
+      ),
+    ).toBe(
+      "process.env.API_SECRET = crypto.randomUUID();\nimport.meta.env.API_TOKEN = crypto.randomUUID();",
+    );
+    expect(
+      redact(
+        '\0\0\n+  process.env.BETTER_AUTH_SECRET = randomBytes(32).toString("base64");\npassword=hunter2',
+      ),
+    ).toBe(
+      '\0\0\n+  process.env.BETTER_AUTH_SECRET = randomBytes(32).toString("base64");\npassword=[REDACTED]',
+    );
+    expect(
+      redact(
+        [
+          "+if (!process.env.BETTER_AUTH_SECRET) {",
+          '+  process.env.BETTER_AUTH_SECRET = randomBytes(32).toString("base64");',
+          "+  password=hunter2",
+          "+}",
+        ].join("\n"),
+      ),
+    ).toBe(
+      [
+        "+if (!process.env.BETTER_AUTH_SECRET) {",
+        '+  process.env.BETTER_AUTH_SECRET = randomBytes(32).toString("base64");',
+        "+  password=[REDACTED]",
+        "+}",
+      ].join("\n"),
+    );
+    const generatedThenSource = `process.env.API_SECRET = crypto.randomUUID();${" ".repeat(50_000)}x`;
+    expect(redact(generatedThenSource)).toBe(generatedThenSource);
+    expect(redact("\0".repeat(50_000))).toBe("\0".repeat(50_000));
+    expect(
+      redact(
+        `${"\0".repeat(50_000)}\nprocess.env.API_SECRET = crypto.randomUUID();\npassword=hunter2`,
+      ),
+    ).toBe(
+      `${"\0".repeat(50_000)}\nprocess.env.API_SECRET = crypto.randomUUID();\npassword=[REDACTED]`,
+    );
+    const generators = Array.from(
+      { length: 2_000 },
+      (_, index) => `process.env.API_SECRET = randomBytes(${index + 1}).toString("hex");`,
+    ).join("\n");
+    expect(redact(generators)).toBe(generators);
     expect(redact("const first=1, API_SECRET=config.apiSecret;")).toBe(
       "const first=1, API_SECRET=config.apiSecret;",
     );
