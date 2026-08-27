@@ -1,0 +1,19 @@
+website/src/pages/index.astro
+  s_dc3585afa809e1::t_8f8722be07e8b9 184-185,189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9050395cb4ec12bdd21444c0950f304af6361a7c",
+  "prompts": {},
+  "sessions": {
+    "s_dc3585afa809e1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fbb832407ffeE2oZBPE9yd3V74",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
