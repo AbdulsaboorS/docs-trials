@@ -1,0 +1,47 @@
+docs/PRODUCT.md
+  s_9de62dc57bf989::t_7359dbb2b6c4d5 153-154
+website/public/sample/README.txt
+  s_9de62dc57bf989::t_d00bb722552489 1-36
+website/public/sample/evidence/boot.json
+  s_9de62dc57bf989::t_73be66ddda4a04 1-25
+website/public/sample/evidence/browser.json
+  s_9de62dc57bf989::t_d597419922c780 1-38
+website/public/sample/evidence/install.json
+  s_9de62dc57bf989::t_e464de801e8aa0 1-15
+website/public/sample/evidence/source-diff.txt
+  s_9de62dc57bf989::t_ac4c5cdc4fa9c5 1-309
+website/public/sample/manifest.json
+  s_9de62dc57bf989::t_98924e626a7181 1-39
+website/public/sample/results.json
+  s_9de62dc57bf989::t_40a173306fccdf 1-85
+website/src/layouts/Base.astro
+  s_9de62dc57bf989::t_6516971ee7439c 35,49
+website/src/pages/report.astro
+  s_4567d23c960b3f::t_5b44f6b4cbc858 5-9,13,18-38,42-43,47-48,54-55,61,79-85,90,113,116-117,122,125-126,131,134-135,158,163,171-173,194-196,222-234
+website/src/styles/global.css
+  s_9de62dc57bf989::t_398e3a90a6f242 642-644,650-652,714-717
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ab84095fb301600579c75bcab176bec55d0337ef",
+  "prompts": {},
+  "sessions": {
+    "s_4567d23c960b3f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fb08841e2ffeIHckURxLVyXgBi",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    },
+    "s_9de62dc57bf989": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_feebd0a4effetU9pEThZjx1dDu",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
