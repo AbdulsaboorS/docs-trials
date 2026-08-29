@@ -1,0 +1,309 @@
+diff --git a/index.html b/index.html
+index 0feb493..d4ba52f 100644
+--- a/index.html
++++ b/index.html
+@@ -3,12 +3,164 @@
+   <head>
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>Static starter</title>
++    <title>Contact us</title>
++    <link rel="preconnect" href="https://challenges.cloudflare.com" />
++    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
++    <style>
++      :root {
++        color-scheme: light;
++        font-family: Georgia, "Times New Roman", serif;
++        color: #24201b;
++        background: #eee8dc;
++      }
++
++      * {
++        box-sizing: border-box;
++      }
++
++      body {
++        margin: 0;
++        min-height: 100vh;
++        padding: clamp(1.25rem, 5vw, 4rem);
++        background:
++          linear-gradient(90deg, transparent 49.8%, rgb(99 75 48 / 8%) 50%, transparent 50.2%),
++          #eee8dc;
++      }
++
++      main {
++        width: min(100%, 62rem);
++        margin: 0 auto;
++        display: grid;
++        grid-template-columns: minmax(14rem, 0.8fr) minmax(18rem, 1.2fr);
++        border: 1px solid #9f907a;
++        background: #f8f4eb;
++        box-shadow: 12px 12px 0 #d4c8b5;
++      }
++
++      header {
++        padding: clamp(2rem, 6vw, 5rem);
++        border-right: 1px solid #9f907a;
++        background: #25362f;
++        color: #f8f4eb;
++      }
++
++      .eyebrow {
++        margin: 0 0 5rem;
++        font: 700 0.75rem/1.2 Arial, sans-serif;
++        letter-spacing: 0.18em;
++        text-transform: uppercase;
++        color: #d5bd8f;
++      }
++
++      h1 {
++        margin: 0 0 1rem;
++        font-size: clamp(2.8rem, 7vw, 5.5rem);
++        font-weight: 400;
++        line-height: 0.88;
++        letter-spacing: -0.06em;
++      }
++
++      header p {
++        max-width: 24rem;
++        margin: 2rem 0 0;
++        line-height: 1.6;
++        color: #ddd8cd;
++      }
++
++      form {
++        display: grid;
++        gap: 1.25rem;
++        padding: clamp(2rem, 6vw, 5rem);
++      }
++
++      label {
++        display: grid;
++        gap: 0.5rem;
++        font: 700 0.72rem/1.2 Arial, sans-serif;
++        letter-spacing: 0.12em;
++        text-transform: uppercase;
++      }
++
++      input,
++      textarea {
++        width: 100%;
++        border: 0;
++        border-bottom: 1px solid #766b5c;
++        border-radius: 0;
++        padding: 0.75rem 0;
++        font: 1.1rem/1.4 Georgia, serif;
++        color: inherit;
++        background: transparent;
++      }
++
++      textarea {
++        min-height: 8rem;
++        resize: vertical;
++      }
++
++      input:focus,
++      textarea:focus {
++        outline: 2px solid #b5573e;
++        outline-offset: 4px;
++      }
++
++      button {
++        justify-self: start;
++        border: 0;
++        padding: 0.9rem 1.4rem;
++        font: 700 0.8rem/1 Arial, sans-serif;
++        letter-spacing: 0.08em;
++        text-transform: uppercase;
++        color: white;
++        background: #b44f36;
++        cursor: pointer;
++      }
++
++      button:hover {
++        background: #8e3926;
++      }
++
++      @media (max-width: 700px) {
++        main {
++          grid-template-columns: 1fr;
++        }
++
++        header {
++          border-right: 0;
++          border-bottom: 1px solid #9f907a;
++        }
++
++        .eyebrow {
++          margin-bottom: 2.5rem;
++        }
++      }
++    </style>
+   </head>
+   <body>
+     <main>
+-      <h1>Static starter</h1>
+-      <p>Replace this page with the documented integration.</p>
++      <header>
++        <p class="eyebrow">New business &amp; inquiries</p>
++        <h1>Start a conversation.</h1>
++        <p>Tell us what you are working on. We read every note and will get back to you soon.</p>
++      </header>
++
++      <form action="/contact" method="POST">
++        <label>
++          Your name
++          <input type="text" name="name" autocomplete="name" required />
++        </label>
++        <label>
++          Email address
++          <input type="email" name="email" autocomplete="email" required />
++        </label>
++        <label>
++          Message
++          <textarea name="message" required></textarea>
++        </label>
++
++        <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA"></div>
++        <button type="submit">Send message</button>
++      </form>
+     </main>
+   </body>
+ </html>
+diff --git a/server.mjs b/server.mjs
+index a4d295a..4ee44ba 100644
+--- a/server.mjs
++++ b/server.mjs
+@@ -1,28 +1,109 @@
+ import { createReadStream } from "node:fs";
+ import { createServer } from "node:http";
+-import { extname, join, normalize } from "node:path";
++import { join } from "node:path";
+ 
+ const port = Number(process.argv[2]);
+ const root = process.cwd();
+-const contentTypes = {
+-  ".css": "text/css; charset=utf-8",
+-  ".html": "text/html; charset=utf-8",
+-  ".js": "text/javascript; charset=utf-8",
+-  ".json": "application/json; charset=utf-8",
+-};
+-
+-createServer((request, response) => {
+-  const pathname = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+-  const relative = pathname === "/" ? "index.html" : pathname.slice(1);
+-  const file = normalize(join(root, relative));
+-  if (!file.startsWith(`${root}/`)) {
+-    response.writeHead(400).end("Bad request");
++const siteverifyUrl = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
++const testSecretKey = "1x0000000000000000000000000000000AA";
++const maxBodySize = 64 * 1024;
++
++function send(response, status, body, contentType = "text/plain; charset=utf-8") {
++  response.writeHead(status, { "content-type": contentType });
++  response.end(body);
++}
++
++function readBody(request) {
++  return new Promise((resolve, reject) => {
++    let body = "";
++
++    request.setEncoding("utf8");
++    request.on("data", (chunk) => {
++      body += chunk;
++      if (body.length > maxBodySize) {
++        reject(new Error("Request body too large"));
++        request.destroy();
++      }
++    });
++    request.on("end", () => resolve(body));
++    request.on("error", reject);
++  });
++}
++
++async function handleContact(request, response) {
++  let fields;
++  try {
++    fields = new URLSearchParams(await readBody(request));
++  } catch {
++    send(response, 413, "Submission too large.");
+     return;
+   }
+-  const stream = createReadStream(file);
+-  stream.once("error", () => response.writeHead(404).end("Not found"));
+-  stream.once("open", () => {
+-    response.writeHead(200, { "content-type": contentTypes[extname(file)] ?? "application/octet-stream" });
+-    stream.pipe(response);
+-  });
++
++  const token = fields.get("cf-turnstile-response");
++  if (!token || token.length > 2048) {
++    send(response, 400, "Verification failed. Please complete the challenge and try again.");
++    return;
++  }
++
++  let validation;
++  try {
++    const verificationResponse = await fetch(siteverifyUrl, {
++      method: "POST",
++      headers: { "content-type": "application/json" },
++      body: JSON.stringify({
++        secret: testSecretKey,
++        response: token,
++        remoteip: request.socket.remoteAddress,
++      }),
++      signal: AbortSignal.timeout(10_000),
++    });
++    validation = await verificationResponse.json();
++  } catch (error) {
++    console.error("Turnstile validation error:", error);
++    send(response, 503, "Verification is temporarily unavailable. Please try again.");
++    return;
++  }
++
++  if (!validation.success) {
++    console.warn("Turnstile validation failed:", validation["error-codes"]);
++    send(response, 400, "Verification failed. Please refresh the challenge and try again.");
++    return;
++  }
++
++  const name = fields.get("name")?.trim();
++  const email = fields.get("email")?.trim();
++  const message = fields.get("message")?.trim();
++  if (!name || !email || !message) {
++    send(response, 400, "Please complete every field.");
++    return;
++  }
++
++  console.log("Accepted contact submission", { name, email, message });
++  send(
++    response,
++    200,
++    "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Message sent</title><body><main><h1>Thank you.</h1><p>Your message was accepted.</p><p><a href=\"/\">Send another message</a></p></main></body></html>",
++    "text/html; charset=utf-8",
++  );
++}
++
++createServer(async (request, response) => {
++  const url = new URL(request.url ?? "/", "http://127.0.0.1");
++
++  if (request.method === "POST" && url.pathname === "/contact") {
++    await handleContact(request, response);
++    return;
++  }
++
++  if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
++    const stream = createReadStream(join(root, "index.html"));
++    stream.once("error", () => send(response, 500, "Unable to load page."));
++    stream.once("open", () => {
++      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
++      stream.pipe(response);
++    });
++    return;
++  }
++
++  send(response, 404, "Not found");
+ }).listen(port, "127.0.0.1");
+
+# Excluded paths
+Git-ignored workspace paths are outside this source diff.

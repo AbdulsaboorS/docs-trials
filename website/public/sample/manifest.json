@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "gate2-turnstile-a",
+  "title": "Turnstile contact form A",
+  "task": "Using only the supplied documentation for Turnstile, replace the static starter page with a contact form protected by the published always-pass test keys. Validate submitted tokens server-side before accepting a contact submission. Keep the form at the entry URL.",
+  "docs": [
+    {
+      "label": "Embed the Turnstile widget",
+      "url": "https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/index.md"
+    },
+    {
+      "label": "Turnstile testing keys",
+      "url": "https://developers.cloudflare.com/turnstile/troubleshooting/testing/index.md"
+    },
+    {
+      "label": "Turnstile server-side validation",
+      "url": "https://developers.cloudflare.com/turnstile/get-started/server-side-validation/index.md"
+    }
+  ],
+  "goals": [
+    "The contact page displays a visible Turnstile test widget.",
+    "The server rejects a submission without a valid Turnstile token.",
+    "The published always-pass test key pair can complete a submission."
+  ],
+  "run": {
+    "install": "pnpm install --frozen-lockfile",
+    "start": "node server.mjs 4311",
+    "url": "http://127.0.0.1:4311",
+    "startupTimeoutSeconds": 120,
+    "commandTimeoutSeconds": 900,
+    "observationWindowSeconds": 10
+  },
+  "allowedOrigins": ["https://challenges.cloudflare.com"],
+  "allowedEnvironment": [],
+  "agent": {
+    "name": "OpenCode",
+    "model": "openai/gpt-5.6-sol"
+  }
+}

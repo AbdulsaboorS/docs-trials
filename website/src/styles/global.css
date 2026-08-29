@@ -639,10 +639,16 @@ code {
   padding: 1.2rem 0;
   border-bottom: 1px solid var(--line);
 }
+.document-list li > * {
+  min-width: 0;
+}
 .document-list span,
 .document-list small {
   color: var(--muted);
   font: 0.7rem var(--mono);
+}
+.document-list small {
+  overflow-wrap: anywhere;
 }
 .document-list a {
   font: 750 0.82rem var(--mono);
@@ -704,6 +710,10 @@ code {
 .result-detail {
   color: var(--muted);
   font: 0.95rem var(--serif);
+}
+.result-evidence {
+  font: 700 0.72rem var(--mono);
+  text-transform: uppercase;
 }
 .report-split {
   display: grid;

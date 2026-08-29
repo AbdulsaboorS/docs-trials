@@ -1,0 +1,85 @@
+{
+  "runId": "gate2-turnstile-a-20260827-190642-913",
+  "outcome": "passed",
+  "results": [
+    {
+      "id": "install",
+      "title": "Dependencies install successfully.",
+      "outcome": "passed",
+      "detail": "Dependency installation completed in 0s.",
+      "evidenceIds": ["install"]
+    },
+    {
+      "id": "boot",
+      "title": "The application starts and answers an HTTP request.",
+      "outcome": "passed",
+      "detail": "http://127.0.0.1:4311 answered with HTTP 200.",
+      "evidenceIds": ["boot"]
+    },
+    {
+      "id": "page-load",
+      "title": "The entry page loads without an HTTP or navigation error.",
+      "outcome": "passed",
+      "detail": "The entry page returned HTTP 200 with title \"Contact us\".",
+      "evidenceIds": ["browser"]
+    },
+    {
+      "id": "visible-content",
+      "title": "The page renders visible content.",
+      "outcome": "passed",
+      "detail": "The page rendered visible text.",
+      "evidenceIds": ["browser"]
+    },
+    {
+      "id": "console-errors",
+      "title": "No uncaught or application console error occurs.",
+      "outcome": "passed",
+      "detail": "No uncaught or application console error.",
+      "evidenceIds": ["browser"]
+    },
+    {
+      "id": "resource-loads",
+      "title": "Same-origin browser assets load successfully.",
+      "outcome": "passed",
+      "detail": "Same-origin browser assets loaded.",
+      "evidenceIds": ["browser"]
+    },
+    {
+      "id": "server-errors",
+      "title": "No request returns a 5xx response.",
+      "outcome": "passed",
+      "detail": "No response returned a 5xx status.",
+      "evidenceIds": ["browser"]
+    },
+    {
+      "id": "client-secrets",
+      "title": "Captured same-origin browser content contains no detected secret.",
+      "outcome": "passed",
+      "detail": "No credential-shaped value in 1 complete same-origin response (3991 bytes).",
+      "evidenceIds": ["browser"]
+    },
+    {
+      "id": "network-egress",
+      "title": "The page contacts no unexpected external origin.",
+      "outcome": "passed",
+      "detail": "The page contacted only declared origins: https://challenges.cloudflare.com",
+      "evidenceIds": ["browser"]
+    }
+  ],
+  "omittedChecks": [
+    {
+      "id": "build",
+      "reason": "The manifest declares no build command."
+    }
+  ],
+  "ungradedObservations": [
+    {
+      "detail": "Git-visible source changes against the prepared baseline were recorded.",
+      "evidenceIds": ["source-diff"]
+    },
+    {
+      "detail": "Git-ignored workspace paths were excluded from source evidence.",
+      "evidenceIds": ["source-diff"]
+    }
+  ]
+}

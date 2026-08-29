@@ -150,6 +150,8 @@ but cannot change stored outcomes.
 ## Security And Trust
 
 - Commands execute with the operator's user account and are not sandboxed.
+- Lifecycle commands can read same-user files and make unrestricted network
+  requests. The browser origin allowlist observes traffic; it does not block it.
 - Lifecycle commands must remain in the foreground. Detached processes are unsupported.
 - Runs outside the workspace prevent baseline contamination, not same-user
   access.

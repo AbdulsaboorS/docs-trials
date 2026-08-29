@@ -1,0 +1,15 @@
+{
+  "command": "pnpm install --frozen-lockfile",
+  "ran": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "outputTruncated": false,
+  "durationMs": 349,
+  "cleanupSucceeded": true,
+  "allowedEnvironment": {
+    "present": [],
+    "missing": []
+  },
+  "capturedOutput": "✓ Lockfile passes supply-chain policies (verified 43m ago)\nAlready up to date\n\nDone in 234ms using pnpm v11.9.0\n"
+}

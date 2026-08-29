@@ -2,39 +2,63 @@
 import Base from "../layouts/Base.astro";
 
 const results = [
-  ["Dependencies install successfully.", "Dependency installation completed in 1s."],
+  [
+    "Dependencies install successfully.",
+    "Dependency installation completed in 0s.",
+    "/sample/evidence/install.json",
+  ],
   [
     "The application starts and answers an HTTP request.",
     "http://127.0.0.1:4311 answered with HTTP 200.",
+    "/sample/evidence/boot.json",
   ],
   [
     "The entry page loads without an HTTP or navigation error.",
     'The entry page returned HTTP 200 with title "Contact us".',
+    "/sample/evidence/browser.json",
   ],
-  ["The page renders visible content.", "The page rendered visible text."],
-  ["No uncaught or application console error occurs.", "No uncaught or application console error."],
-  ["Same-origin browser assets load successfully.", "Same-origin browser assets loaded."],
-  ["No request returns a 5xx response.", "No response returned a 5xx status."],
+  [
+    "The page renders visible content.",
+    "The page rendered visible text.",
+    "/sample/evidence/browser.json",
+  ],
+  [
+    "No uncaught or application console error occurs.",
+    "No uncaught or application console error.",
+    "/sample/evidence/browser.json",
+  ],
+  [
+    "Same-origin browser assets load successfully.",
+    "Same-origin browser assets loaded.",
+    "/sample/evidence/browser.json",
+  ],
+  [
+    "No request returns a 5xx response.",
+    "No response returned a 5xx status.",
+    "/sample/evidence/browser.json",
+  ],
   [
     "Captured same-origin browser content contains no detected secret.",
-    "No credential-shaped value in 1 complete same-origin response (4105 bytes).",
+    "No credential-shaped value in 1 complete same-origin response (3991 bytes).",
+    "/sample/evidence/browser.json",
   ],
   [
     "The page contacts no unexpected external origin.",
-    "The page contacted only the declared Turnstile origin.",
+    "The page contacted only declared origins: https://challenges.cloudflare.com",
+    "/sample/evidence/browser.json",
   ],
 ];
 ---
 
 <Base
-  title="Sanitized attempt summary — Docs Trials"
-  description="A visual summary of a sanitized Docs Trials Turnstile contact-form attempt."
+  title="Sanitized sample report — Docs Trials"
+  description="A real Docs Trials Turnstile attempt with inspectable sanitized evidence."
 >
   <article class="report-page shell">
     <a class="back-link" href="/">← Back to docs-trials</a>
     <header class="report-header">
       <div>
-        <p class="kicker">Real local attempt · visual summary</p>
+        <p class="kicker">Real local attempt · sanitized public copy</p>
         <h1>Attempt Summary</h1>
       </div>
       <div class="outcome-stamp">
@@ -52,15 +76,18 @@ const results = [
     </div>
 
     <p class="report-summary-note">
-      <strong>Pre-release visual summary.</strong> Gate 2 is complete, but this page predates its successful
-      release-candidate attempt set. It transcribes selected fields from a sanitized local report without
-      publishing the retained evidence bundle. This page is not release-validation evidence, and readers
-      cannot independently inspect its result references.
+      This report renders the real attempt <code>gate2-turnstile-a-20260827-190642-913</code>. Each
+      result links to its public evidence. Local paths and ephemeral process identifiers were
+      removed; no result-bearing observation changed. The sample is inspectable, but it is not
+      independently rerunnable because the starter workspace and frozen documentation bodies are not
+      public. <a href="/sample/README.txt">Read the bundle notes</a>, <a
+        href="/sample/manifest.json">inspect the frozen manifest</a
+      >, or <a href="/sample/results.json">inspect the machine-readable results</a>.
     </p>
 
     <dl class="report-meta">
       <div><dt>Trial</dt><dd>Turnstile contact form A</dd></div>
-      <div><dt>Attempt</dt><dd><code>gate2-turnstile-a-20260826-175322-635</code></dd></div>
+      <div><dt>Attempt</dt><dd><code>gate2-turnstile-a-20260827-190642-913</code></dd></div>
       <div><dt>Checks</dt><dd>9 passed · 0 failed · 0 inconclusive</dd></div>
       <div><dt>Agent</dt><dd>OpenCode · openai/gpt-5.6-sol</dd></div>
       <div><dt>Starter revision</dt><dd><code>1ebd1647e17e</code></dd></div>
@@ -83,26 +110,29 @@ const results = [
       <ul class="document-list">
         <li>
           <span>01</span><a
-            href="https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/"
+            href="https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/index.md"
             >Embed the Turnstile widget</a
           ><small
-            >Live source (attribution only) · Trial copy frozen as Markdown · SHA-256 recorded</small
+            >Frozen text/markdown; charset=utf-8 body · HTTP 200 at 2026-08-27T19:06:42.926Z ·
+            19,383 bytes · SHA-256 85cd864a0ad91233b112e5bcf5c753f5f69841248cf7a0f723801e226cc9478b</small
           >
         </li>
         <li>
           <span>02</span><a
-            href="https://developers.cloudflare.com/turnstile/troubleshooting/testing/"
+            href="https://developers.cloudflare.com/turnstile/troubleshooting/testing/index.md"
             >Turnstile testing keys</a
           ><small
-            >Live source (attribution only) · Trial copy frozen as Markdown · SHA-256 recorded</small
+            >Frozen text/markdown; charset=utf-8 body · HTTP 200 at 2026-08-27T19:06:43.282Z · 7,415
+            bytes · SHA-256 09fee37bd6396a9d3696c5792310b35879c7cfebfdb66ea71410e45c4cb30fcd</small
           >
         </li>
         <li>
           <span>03</span><a
-            href="https://developers.cloudflare.com/turnstile/get-started/server-side-validation/"
+            href="https://developers.cloudflare.com/turnstile/get-started/server-side-validation/index.md"
             >Server-side validation</a
           ><small
-            >Live source (attribution only) · Trial copy frozen as Markdown · SHA-256 recorded</small
+            >Frozen text/markdown; charset=utf-8 body · HTTP 200 at 2026-08-27T19:06:43.491Z ·
+            22,973 bytes · SHA-256 f2de00a4976bff2a46b8b2fc459ab2fe81f2f03bce8f13701f6e0d024449cfb1</small
           >
         </li>
       </ul>
@@ -125,11 +155,12 @@ const results = [
               <th scope="col">Outcome</th>
               <th scope="col">Check</th>
               <th scope="col">Observed detail</th>
+              <th scope="col">Evidence</th>
             </tr>
           </thead>
           <tbody>
             {
-              results.map(([check, detail], index) => (
+              results.map(([check, detail, evidence], index) => (
                 <tr>
                   <td class="result-index">{String(index + 1).padStart(2, "0")}</td>
                   <td class="result-badge">Pass</td>
@@ -137,6 +168,9 @@ const results = [
                     {check}
                   </th>
                   <td class="result-detail">{detail}</td>
+                  <td class="result-evidence">
+                    <a href={evidence}>Inspect</a>
+                  </td>
                 </tr>
               ))
             }
@@ -157,7 +191,9 @@ const results = [
         <p class="report-section-number">05 / Ungraded</p>
         <h2>Source changes</h2>
         <p>
-          Git-visible changes were retained as evidence. Git-ignored workspace paths were excluded.
+          Git-visible changes were retained as <a href="/sample/evidence/source-diff.txt"
+            >evidence</a
+          >. Git-ignored workspace paths were excluded.
         </p>
       </div>
     </section>
@@ -181,6 +217,19 @@ const results = [
       <p>
         The baseline does not prove that the application fulfills the task or that documentation
         caused an outcome.
+      </p>
+    </aside>
+
+    <aside class="report-reading">
+      <h2>How to investigate this attempt</h2>
+      <p>
+        Start with a result's <strong>Inspect</strong> link and confirm that the retained observation
+        supports its detail. Command and boot checks link to process evidence. Browser checks link to
+        navigation, content, console, request, response, content-scan, and origin observations.
+      </p>
+      <p>
+        Use the source diff as ungraded context only. A failed check would be a fact about the
+        attempt, not a documentation finding, until separate evidence supported that attribution.
       </p>
     </aside>
   </article>

@@ -1,0 +1,38 @@
+{
+  "navigated": true,
+  "navigationDetail": "The entry page loaded.",
+  "httpStatus": 200,
+  "title": "Contact us",
+  "consoleErrors": [],
+  "droppedConsoleErrors": 0,
+  "pageErrors": [],
+  "resourceFailures": [],
+  "pendingResources": [],
+  "serverErrors": [],
+  "externalOrigins": ["https://challenges.cloudflare.com"],
+  "webSocketChannelsObserved": 0,
+  "ungradedObservations": [],
+  "contentScan": {
+    "responsesScanned": 1,
+    "bytesScanned": 3991,
+    "findings": [],
+    "gaps": [],
+    "knownGapCount": 0,
+    "captureFaultCount": 0,
+    "textDecodingGapCount": 0,
+    "responses": [
+      {
+        "url": "http://127.0.0.1:4311/",
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "observedBytes": 3991,
+        "disposition": "complete",
+        "digest": "0027d6772d394f8edbadf4a26c617de9a41b2dcf5b27351a453a8c2b7a5d929c"
+      }
+    ]
+  },
+  "visibleContent": {
+    "kind": "text"
+  },
+  "bodyTextSample": "NEW BUSINESS & INQUIRIES\n\nStart a conversation.\n\nTell us what you are working on. We read every note and will get back to you soon.\n\nYOUR NAME\nEMAIL ADDRESS\nMESSAGE\nSEND MESSAGE"
+}

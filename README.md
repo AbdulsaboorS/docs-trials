@@ -5,36 +5,26 @@ Check whether an AI coding agent can build a working integration from your docum
 Give an agent your docs and a task. Docs Trials records what it built, then runs
 deterministic checks against the running application and writes a report.
 
-It runs on your machine. Nothing is uploaded.
+It runs on your machine. Docs Trials sends no telemetry and does not upload
+reports. Project commands and the application can still make network requests.
 
-## Why
+## Sample
 
-A build that exits `0` proves very little. Here is a real run against the
-[TanStack Query quick start](https://tanstack.com/query/latest/docs/framework/react/quick-start).
-The last line of that page is `render(<App />, document.getElementById('root'))`,
-which is the React 17 API. An earlier eight-check trial observed this:
+The repository includes a real sanitized Gate 2
+[Turnstile attempt report](https://github.com/AbdulsaboorS/docs-trials/blob/main/website/src/pages/report.astro)
+and its
+[public evidence bundle](https://github.com/AbdulsaboorS/docs-trials/tree/main/website/public/sample).
+All nine applicable checks passed. The build check did not apply because the
+static starter declared no build command.
 
-```txt
-FAILED — 7 passed, 1 failed, 0 inconclusive
-
-  PASS  Dependencies install successfully.
-  PASS  The project builds successfully.
-  PASS  The application starts and answers an HTTP request.
-  PASS  The entry page loads without an HTTP or navigation error.
-  FAIL  The page raises no uncaught error or console error.
-        1 application error. First: render is not a function
-  PASS  No request returns a 5xx response.
-  PASS  No credential-shaped value appears in browser-delivered assets.
-  PASS  The page contacts no unexpected external origin.
-```
-
-The project installs. The project builds. The server answers with HTTP 200. The
-page is blank. Only a browser catches it.
+Each result links to the command or browser observation that produced it. The
+sample also keeps source changes as explicitly ungraded evidence. It does not
+claim that the contact-form task was fulfilled.
 
 ## Install
 
-The package is not published yet. After the first public release, install the
-CLI and its matching Chromium build with:
+For a release that is available on npm, install the CLI and its matching
+Chromium build with:
 
 ```sh
 npm install -g docs-trials
@@ -56,6 +46,11 @@ docs-trials verify latest        # run the checks, write AX.md
 
 `verify` exits `0` when every check passed, `1` when a check failed, and `2`
 when the result is inconclusive. That makes it usable in CI.
+
+The optional operator-only skill is in the
+[`skills/docs-trials` directory](https://github.com/AbdulsaboorS/docs-trials/tree/main/skills/docs-trials).
+Install that directory through your agent's skill mechanism. Give the subject
+agent only the generated `AGENT_INSTRUCTIONS.md`, not the operator skill.
 
 If the verifier process stops and leaves a run locked, use
 `docs-trials recover <run>`. Recovery removes lock files only when their
@@ -156,6 +151,25 @@ operating-system account. Attempt immutability prevents later CLI writes; it
 does not authenticate files against same-user tampering. Evidence is redacted
 before it is written.
 
+## Investigate an attempt
+
+Start with a result's evidence link. Confirm that the retained observation
+supports the result detail before you investigate a possible cause.
+
+| Result area                                         | Evidence to inspect                            | Next step                                                                                           |
+| --------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| install or build                                    | `evidence/install.txt` or `evidence/build.txt` | Find the first command error and reproduce the declared command in the disposable workspace.        |
+| boot                                                | `evidence/boot.txt`                            | Check the start output, exact URL, HTTP status, and listener ownership observations.                |
+| page, content, console, assets, or server responses | `evidence/browser.txt`                         | Check navigation, visible-content, console, request, and response observations for the named check. |
+| client secrets                                      | `evidence/browser.txt`                         | Inspect the content-scan finding or capture gap. Do not publish a detected value.                   |
+| network egress                                      | `evidence/browser.txt` and `run.json`          | Compare observed external origins with the frozen allowlist.                                        |
+| source changes                                      | `evidence/source-diff.txt`                     | Use the ungraded diff as context only. It did not produce a check result.                           |
+
+For an inconclusive result, identify the missing evidence or infrastructure
+problem stated in the detail, correct it, and create a new attempt. Do not turn a
+check failure into a documentation finding until the evidence supports that
+attribution.
+
 ## Limits
 
 Read these before you trust a result.
@@ -171,14 +185,23 @@ Read these before you trust a result.
 - **The checks are generic.** Passing means the integration works mechanically,
   not that it does what you asked.
 - **Commands run on your host.** `install`, `build`, and `start` are not
-  sandboxed. Use a disposable workspace and remove provider credentials.
+  sandboxed. They can read same-user files and make unrestricted network
+  requests. The browser origin allowlist observes traffic; it does not block it.
+  Use an isolated account or virtual machine for untrusted projects.
 - **Lifecycle commands must stay in the foreground.** Detached daemons and
   containers can outlive verification because v0 has no process isolation.
 
 ## Status
 
-Early. The CLI works end to end and the checks above are real. There is no
-hosted mode, no comparison view, and no task-specific verification yet.
+Docs Trials is distributed as a local CLI with an optional operator skill and an
+inspectable public sample. There is no hosted mode, comparison view, or
+task-specific verification.
+
+Read the
+[product contract](https://github.com/AbdulsaboorS/docs-trials/blob/main/docs/PRODUCT.md)
+for methodology and limits, and the
+[security policy](https://github.com/AbdulsaboorS/docs-trials/blob/main/SECURITY.md)
+before running project commands.
 
 The previous Cloudflare Workers implementation is archived at the
 `archive/cloud-path-v0` tag.

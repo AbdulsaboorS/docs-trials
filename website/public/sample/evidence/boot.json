@@ -1,0 +1,25 @@
+{
+  "command": "node server.mjs 4311",
+  "url": "http://127.0.0.1:4311",
+  "ran": true,
+  "probe": {
+    "preflightPortOccupied": false,
+    "attempts": 2,
+    "lastReachable": true,
+    "lastStatus": 200
+  },
+  "listenerOwnership": {
+    "initial": {
+      "status": "owned",
+      "owners": ["[process-id]"]
+    },
+    "rechecks": "All recorded rechecks were stable with the same owner."
+  },
+  "outputTruncated": false,
+  "cleanupStatus": "succeeded",
+  "allowedEnvironment": {
+    "present": [],
+    "missing": []
+  },
+  "capturedOutput": ""
+}
