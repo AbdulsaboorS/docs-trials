@@ -7,8 +7,8 @@ Publication and production deployment require explicit owner approval.
 ## 1. Finalize The Release Candidate
 
 - [x] Review the release-preparation worktree.
-- [ ] Commit and push the intended files.
-- [ ] Confirm CI passes on the release commit.
+- [x] Commit and push the intended files.
+- [x] Confirm CI passes on the release commit.
 - [x] Confirm `pnpm release:publish:dry-run` passes.
 - [x] Enable and test GitHub private vulnerability reporting.
 

@@ -16,13 +16,13 @@ Replace this handoff after substantial work. Never exceed 50 lines.
 - Release review found no code, evidence, privacy, accessibility, or broken-link defect. The packaged README, operator skill, and public sample now provide evidence-linked investigation guidance without changing the frozen verifier.
 - `pnpm release:publish:dry-run` passed lint, format, typecheck, 213 tests, package installation, Chromium setup, and npm dry-run publication. Site check/build, Wrangler deployment dry run, four viewport smoke tests, and all seven sample URLs also passed.
 - GitHub private vulnerability reporting is enabled. `docs/LAUNCH.md` requires owner-run manual acceptance before npm publication or production deployment.
+- Release-preparation commit `ab84095fb301600579c75bcab176bec55d0337ef` is pushed. CI passed Linux Node 22/24/26 and macOS Node 22: https://github.com/AbdulsaboorS/docs-trials/actions/runs/33278475275
 - npm was not published and the website was not deployed.
 
 ## Next Work
 
-1. Commit and push the verified release-preparation worktree and confirm CI.
-2. Complete and record the owner's manual acceptance trials before publication or deployment.
-3. Obtain explicit approval, publish and deploy, verify production, prepare GitHub, then announce v0.1.0.
+1. Complete and record the owner's manual acceptance trials before publication or deployment.
+2. Obtain explicit approval, publish and deploy, verify production, prepare GitHub, then announce v0.1.0.
 
 ## Required Files
 
