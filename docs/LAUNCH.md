@@ -24,25 +24,29 @@ Publication and production deployment require explicit owner approval.
 The owner personally tests representative local trials before any npm
 publication or production website deployment.
 
-- [ ] Install the release tarball in a clean environment and run
+- [x] Install the release tarball in a clean environment and run
       `docs-trials install-browser`.
-- [ ] In disposable starter projects, manually run the complete `init`,
+- [x] In disposable starter projects, manually run the complete `init`,
       `prepare`, subject-agent, and `verify` flow.
-- [ ] Read each generated report and its referenced evidence.
-- [ ] Confirm passed, failed, and inconclusive observations are described
+- [x] Read each generated report and its referenced evidence.
+- [x] Confirm passed, failed, and inconclusive observations are described
       honestly where the manual trials produce them.
-- [ ] Confirm no credential appears in retained evidence and no private local
+- [x] Confirm no credential appears in retained evidence and no private local
       path appears in an artifact selected for public release.
-- [ ] Record the tested tarball digest, attempt IDs, date, and owner sign-off
+- [x] Record the tested tarball digest, attempt IDs, date, and owner sign-off
       below.
 
-Tarball digest:
+Tarball digest: `480b1c4f3ce9e166f31679931b0951be2477108ff2a8dedd79776743c08e2f45`
 
-Attempt IDs:
+Attempt IDs: `agents-ai-search-us-open-20260907-190832-992`,
+`agents-ai-search-us-open-20260907-192831-169`,
+`final-static-20260907-195949-192`,
+`final-static-2-20260907-201300-795`, and
+`final-static-3-20260908-154337-509`
 
-Acceptance date:
+Acceptance date: 2026-09-08
 
-Owner sign-off:
+Owner sign-off: Abdulsaboor approved on 2026-09-08.
 
 ## 4. Publish And Deploy
 

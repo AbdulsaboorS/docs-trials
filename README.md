@@ -63,6 +63,9 @@ PID reuse can also require manual inspection before recovery is possible.
 
 ### trial.json
 
+`docs-trials init` selects an available loopback port and uses it in both the
+start command and URL. The port in this example is illustrative.
+
 ```json
 {
   "version": 1,
@@ -74,14 +77,18 @@ PID reuse can also require manual inspection before recovery is possible.
   "run": {
     "install": "npm install",
     "build": "npm run build",
-    "start": "npm run dev -- --port 5173 --strictPort",
-    "url": "http://127.0.0.1:5173",
+    "start": "npm run dev -- --port 43217",
+    "url": "http://localhost:43217",
     "observationWindowSeconds": 5
   },
   "allowedOrigins": ["https://api.example.com"],
   "allowedEnvironment": ["EXAMPLE_API_KEY"]
 }
 ```
+
+Confirm the start command and URL before `prepare`; another process can claim
+the port later, and verification will then report the boot evidence as
+inconclusive instead of observing the wrong application.
 
 Lifecycle commands receive a small base environment plus only the variable
 names listed in `allowedEnvironment`. The manifest and report never store their

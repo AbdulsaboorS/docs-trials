@@ -9,6 +9,7 @@ export default tseslint.config(
       "node_modules/",
       "fixtures/",
       "coverage/",
+      ".docs-trials/",
       "tools/oxlint/anti-slop/",
       "website/.astro/",
       "website/dist/",
