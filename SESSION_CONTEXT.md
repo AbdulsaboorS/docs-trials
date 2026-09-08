@@ -14,11 +14,11 @@ Updated: 2026-09-08
 - Exact-candidate attempt `final-static-2-20260907-201300-795` was honestly inconclusive after a transient npm install timeout.
 - Exact-candidate attempt `final-static-3-20260908-154337-509` produced 9 passed, 0 failed, and 1 inconclusive check. The unresolved client-secret check correctly reports uncaptured Vite WebSocket messages.
 - Evidence review found no credential value. Abdulsaboor approved owner acceptance on 2026-09-08; publication and deployment remain unapproved.
+- Port-selection fix `8efa05d` is pushed, issue #1 is closed, and CI passed on Linux Node 22/24/26 and macOS Node 22: https://github.com/AbdulsaboorS/docs-trials/actions/runs/34247081582
 
 ## Next Work
 
-1. Review and commit the port-selection fix, push it, and confirm CI on the new release commit.
-2. Obtain explicit approval before npm publication or website deployment.
+1. Obtain explicit approval before npm publication or website deployment.
 
 ## Required Files
 
@@ -29,5 +29,4 @@ Updated: 2026-09-08
 
 ## Blockers
 
-- The fix is uncommitted and CI has not run on it.
 - Publication and deployment approval are not recorded.
