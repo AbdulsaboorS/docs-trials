@@ -1,0 +1,15 @@
+{
+  "command": "npm install",
+  "ran": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "outputTruncated": false,
+  "durationMs": 1234,
+  "cleanupSucceeded": true,
+  "allowedEnvironment": {
+    "present": [],
+    "missing": []
+  },
+  "capturedOutput": "\nadded 14 packages, and audited 15 packages in 1s\n\n5 packages are looking for funding\n  run `npm fund` for details\n\nfound 0 vulnerabilities\n"
+}
