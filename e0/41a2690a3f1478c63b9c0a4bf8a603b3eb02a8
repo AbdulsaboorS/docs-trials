@@ -1,0 +1,21 @@
+handoff/final-static-3/subject/index.html
+  s_4567d23c960b3f::t_d45da2d6f1f9ee 1-416
+handoff/final-static-3/subject/package-lock.json
+  s_4567d23c960b3f::t_bb3de785102b82 1-1167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e041a2690a3f1478c63b9c0a4bf8a603b3eb02a8",
+  "prompts": {},
+  "sessions": {
+    "s_4567d23c960b3f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fb08841e2ffeIHckURxLVyXgBi",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "abdulsaboor <abdulsaboor@cloudflare.com>"
+    }
+  }
+}
