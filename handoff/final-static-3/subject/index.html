@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Northstar Version 2.4 release notes for September 7, 2026." />
+    <title>Northstar Release Notes</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #142721;
+        --muted: #62716c;
+        --paper: #f3f0e7;
+        --paper-light: #faf8f2;
+        --navy: #102942;
+        --navy-light: #1c3b57;
+        --rule: #d7d4c9;
+        --accent: #d9663d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.6;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .masthead {
+        position: relative;
+        min-height: 440px;
+        overflow: hidden;
+        background: var(--navy);
+        color: #f9f7ef;
+      }
+
+      .masthead::before,
+      .masthead::after {
+        position: absolute;
+        content: "";
+        border: 1px solid rgba(249, 247, 239, 0.14);
+        border-radius: 50%;
+      }
+
+      .masthead::before {
+        width: 430px;
+        height: 430px;
+        right: -90px;
+        top: -225px;
+      }
+
+      .masthead::after {
+        width: 620px;
+        height: 620px;
+        right: -185px;
+        top: -320px;
+      }
+
+      .topbar,
+      .hero,
+      .page {
+        width: min(1120px, calc(100% - 48px));
+        margin-inline: auto;
+      }
+
+      .topbar {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 82px;
+        border-bottom: 1px solid rgba(249, 247, 239, 0.2);
+      }
+
+      .brand {
+        display: inline-flex;
+        gap: 12px;
+        align-items: center;
+        font-size: 0.78rem;
+        font-weight: 750;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .mark {
+        width: 18px;
+        height: 18px;
+        background: var(--accent);
+        clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+      }
+
+      .edition {
+        color: rgba(249, 247, 239, 0.62);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hero {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 210px;
+        gap: 64px;
+        align-items: end;
+        padding: 76px 0 70px;
+      }
+
+      .eyebrow,
+      .section-index,
+      .release-label {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: #f09a78;
+      }
+
+      h1 {
+        max-width: 760px;
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(3.15rem, 7vw, 6.5rem);
+        font-weight: 400;
+        letter-spacing: -0.055em;
+        line-height: 0.92;
+      }
+
+      .release-stamp {
+        padding-top: 17px;
+        border-top: 1px solid rgba(249, 247, 239, 0.35);
+      }
+
+      .release-label {
+        display: block;
+        margin-bottom: 7px;
+        color: rgba(249, 247, 239, 0.55);
+      }
+
+      .release-stamp time {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 1.15rem;
+      }
+
+      .page {
+        display: grid;
+        grid-template-columns: 210px minmax(0, 1fr);
+        gap: 64px;
+        padding: 76px 0 100px;
+      }
+
+      .contents {
+        align-self: start;
+        position: sticky;
+        top: 28px;
+      }
+
+      .contents p {
+        margin: 0 0 18px;
+        color: var(--muted);
+      }
+
+      .contents a {
+        display: block;
+        padding: 9px 0;
+        border-top: 1px solid var(--rule);
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .contents a:last-child {
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .contents a:hover,
+      .contents a:focus-visible {
+        color: var(--accent);
+      }
+
+      .release-notes {
+        border-top: 1px solid var(--ink);
+      }
+
+      .note-section {
+        display: grid;
+        grid-template-columns: 90px minmax(0, 1fr);
+        gap: 28px;
+        padding: 42px 0 52px;
+        border-bottom: 1px solid var(--rule);
+        scroll-margin-top: 20px;
+      }
+
+      .section-index {
+        padding-top: 7px;
+        color: var(--accent);
+      }
+
+      h2 {
+        margin: 0 0 24px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(2rem, 4vw, 3rem);
+        font-weight: 400;
+        letter-spacing: -0.035em;
+        line-height: 1;
+      }
+
+      .entry {
+        position: relative;
+        padding-left: 24px;
+      }
+
+      .entry::before {
+        position: absolute;
+        top: 0.67em;
+        left: 0;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        content: "";
+      }
+
+      .entry h3 {
+        margin: 0 0 6px;
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+      }
+
+      .entry p {
+        max-width: 620px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        padding-top: 34px;
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 4px;
+      }
+
+      @media (max-width: 720px) {
+        .masthead {
+          min-height: auto;
+        }
+
+        .topbar,
+        .hero,
+        .page {
+          width: min(100% - 32px, 600px);
+        }
+
+        .edition {
+          display: none;
+        }
+
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 44px;
+          padding: 62px 0 44px;
+        }
+
+        h1 {
+          font-size: clamp(3.2rem, 18vw, 5.25rem);
+        }
+
+        .release-stamp {
+          max-width: 210px;
+        }
+
+        .page {
+          display: block;
+          padding: 40px 0 72px;
+        }
+
+        .contents {
+          position: static;
+          margin-bottom: 50px;
+        }
+
+        .note-section {
+          grid-template-columns: 50px minmax(0, 1fr);
+          gap: 12px;
+          padding: 34px 0 42px;
+        }
+
+        .entry {
+          padding-left: 19px;
+        }
+
+        footer {
+          display: block;
+        }
+
+        footer span {
+          display: block;
+          margin-top: 8px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="topbar">
+        <div class="brand"><span class="mark" aria-hidden="true"></span>Northstar</div>
+        <span class="edition">Release archive / 2026</span>
+      </div>
+
+      <div class="hero">
+        <div>
+          <p class="eyebrow">Release notes</p>
+          <h1>Version 2.4</h1>
+        </div>
+        <div class="release-stamp">
+          <span class="release-label">Released</span>
+          <time datetime="2026-09-07">September 7, 2026</time>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <nav class="contents" aria-label="Release note sections">
+        <p class="release-label">In this release</p>
+        <a href="#highlights">Highlights</a>
+        <a href="#improvements">Improvements</a>
+        <a href="#fixes">Fixes</a>
+      </nav>
+
+      <div>
+        <article class="release-notes" aria-label="Version 2.4 release notes">
+          <section class="note-section" id="highlights">
+            <span class="section-index">01</span>
+            <div>
+              <h2>Highlights</h2>
+              <div class="entry">
+                <h3>A new Northstar release</h3>
+                <p>Version 2.4 is now available as the latest Northstar release.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="note-section" id="improvements">
+            <span class="section-index">02</span>
+            <div>
+              <h2>Improvements</h2>
+              <div class="entry">
+                <h3>A more polished experience</h3>
+                <p>This release refines the Northstar experience across screen sizes.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="note-section" id="fixes">
+            <span class="section-index">03</span>
+            <div>
+              <h2>Fixes</h2>
+              <div class="entry">
+                <h3>Details, resolved</h3>
+                <p>Version 2.4 addresses visual inconsistencies for a steadier experience.</p>
+              </div>
+            </div>
+          </section>
+        </article>
+
+        <footer>
+          Northstar Release Notes
+          <span>Version 2.4 / September 7, 2026</span>
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+Sanitized handoff note
+
+The original attempt recorded the Git-visible source diff as an ungraded
+observation. The full diff is omitted from this public handoff because it
+duplicates the resulting source at ../../subject/index.html. This note is not
+the original evidence and does not affect any check outcome.

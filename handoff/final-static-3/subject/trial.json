@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "final-static-3",
+  "title": "Static Release Notes Page",
+  "task": "Using only the supplied page requirements, replace the starter with a polished static release-notes page.",
+  "docs": [
+    {
+      "label": "Page requirements",
+      "text": "Build one responsive static HTML page for a fictional product named Northstar. The page must have the title Northstar Release Notes, a visible heading that says Version 2.4, a release date of September 7, 2026, and sections named Highlights, Improvements, and Fixes. Include at least one item in each section. Use only local HTML and CSS. Do not load external fonts, scripts, images, or other resources."
+    }
+  ],
+  "goals": [
+    "The entry page presents the supplied release-note content in a readable responsive layout."
+  ],
+  "run": {
+    "install": "npm install",
+    "build": "npm run build",
+    "start": "npm run dev -- --port 55129",
+    "url": "http://localhost:55129",
+    "observationWindowSeconds": 5
+  },
+  "allowedOrigins": [],
+  "allowedEnvironment": [],
+  "agent": {
+    "name": "OpenCode",
+    "model": "openai/gpt-5.6-sol"
+  }
+}
