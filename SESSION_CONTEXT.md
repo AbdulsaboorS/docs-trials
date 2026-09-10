@@ -1,6 +1,6 @@
 # Session Context
 
-Updated: 2026-09-08
+Updated: 2026-09-10
 
 ## Last Session Summary
 
@@ -15,6 +15,8 @@ Updated: 2026-09-08
 - Exact-candidate attempt `final-static-3-20260908-154337-509` produced 9 passed, 0 failed, and 1 inconclusive check. The unresolved client-secret check correctly reports uncaptured Vite WebSocket messages.
 - Evidence review found no credential value. Abdulsaboor approved owner acceptance on 2026-09-08; publication and deployment remain unapproved.
 - Port-selection fix `8efa05d` is pushed, issue #1 is closed, and CI passed on Linux Node 22/24/26 and macOS Node 22: https://github.com/AbdulsaboorS/docs-trials/actions/runs/34247081582
+- Local viewing of the final static subject was rechecked on 2026-09-10. It returned HTTP 200 while Vite was running; the URL expires when the foreground server exits, and `index.html` can be opened directly.
+- Repository `main` and `origin/main` were synchronized at `627260688e8cd48254255e9dd0cf85b174f40931` before this handoff update.
 
 ## Next Work
 
@@ -30,3 +32,4 @@ Updated: 2026-09-08
 ## Blockers
 
 - Publication and deployment approval are not recorded.
+- The final attempt and ignored acceptance workspace are local-only. They are not transferred by Git and must not be added to the public repository without a separate evidence-disclosure review.
