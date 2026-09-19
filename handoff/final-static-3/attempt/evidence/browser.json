@@ -1,0 +1,54 @@
+{
+  "navigated": true,
+  "navigationDetail": "The entry page loaded.",
+  "httpStatus": 200,
+  "title": "Northstar Release Notes",
+  "consoleErrors": [],
+  "droppedConsoleErrors": 0,
+  "pageErrors": [],
+  "resourceFailures": [],
+  "pendingResources": [],
+  "serverErrors": [],
+  "externalOrigins": [],
+  "webSocketChannelsObserved": 1,
+  "ungradedObservations": [],
+  "contentScan": {
+    "responsesScanned": 3,
+    "bytesScanned": 192035,
+    "findings": [],
+    "gaps": [],
+    "knownGapCount": 0,
+    "captureFaultCount": 0,
+    "textDecodingGapCount": 0,
+    "responses": [
+      {
+        "url": "http://localhost:55129/",
+        "status": 200,
+        "contentType": "text/html",
+        "observedBytes": 9623,
+        "disposition": "complete",
+        "digest": "98dd7325ebb4f826fee4bc625f740b78e2af7dd97bcc9516ed80c7d05093e093"
+      },
+      {
+        "url": "http://localhost:55129/@vite/client",
+        "status": 200,
+        "contentType": "text/javascript",
+        "observedBytes": 178934,
+        "disposition": "complete",
+        "digest": "76032fe8c98ea9b92ec36cdda2a534e9fe398a7a2e6a86fceb5743c0aba49c75"
+      },
+      {
+        "url": "http://localhost:55129/node_modules/vite/dist/client/env.mjs",
+        "status": 200,
+        "contentType": "text/javascript",
+        "observedBytes": 3478,
+        "disposition": "complete",
+        "digest": "989a1a6b55bdf57842aa46c52fefdce50a16fbfdfbf643e682ac82ad73023401"
+      }
+    ]
+  },
+  "visibleContent": {
+    "kind": "text"
+  },
+  "bodyTextSample": "NORTHSTAR\nRELEASE ARCHIVE / 2026\n\nRELEASE NOTES\n\nVersion 2.4\nRELEASED\nSeptember 7, 2026\n\nIN THIS RELEASE\n\nHighlights\nImprovements\nFixes\n01\nHighlights\nA new Northstar release\n\nVersion 2.4 is now available as the latest Northstar release.\n\n02\nImprovements\nA more polished experience\n\nThis release refines the Northstar experience across screen sizes.\n\n03\nFixes\nDetails, resolved\n\nVersion 2.4 addresses visual inconsistencies for a steadier experience.\n\nNORTHSTAR RELEASE NOTES\nVERSION 2.4 / SEPTEMBER 7, 2026"
+}

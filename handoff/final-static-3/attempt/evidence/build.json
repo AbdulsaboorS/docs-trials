@@ -1,0 +1,15 @@
+{
+  "command": "npm run build",
+  "ran": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "outputTruncated": false,
+  "durationMs": 1235,
+  "cleanupSucceeded": true,
+  "allowedEnvironment": {
+    "present": [],
+    "missing": []
+  },
+  "capturedOutput": "\n> docs-trials-final-acceptance@1.0.0 build\n> vite build\n\nvite v7.3.6 building client environment for production...\ntransforming...\n2 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html  9.57 kB | gzip: 2.47 kB\nbuilt in 48ms\n"
+}
