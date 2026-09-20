@@ -1,6 +1,6 @@
 # Session Context
 
-Updated: 2026-09-10
+Updated: 2026-09-19
 
 ## Last Session Summary
 
@@ -16,11 +16,20 @@ Updated: 2026-09-10
 - Evidence review found no credential value. Abdulsaboor approved owner acceptance on 2026-09-08; publication and deployment remain unapproved.
 - Port-selection fix `8efa05d` is pushed, issue #1 is closed, and CI passed on Linux Node 22/24/26 and macOS Node 22: https://github.com/AbdulsaboorS/docs-trials/actions/runs/34247081582
 - Local viewing of the final static subject was rechecked on 2026-09-10. It returned HTTP 200 while Vite was running; the URL expires when the foreground server exits, and `index.html` can be opened directly.
-- Repository `main` and `origin/main` were synchronized at `627260688e8cd48254255e9dd0cf85b174f40931` before this handoff update.
+- Repository `main` and `origin/main` are synchronized at merged commit `41b430ef873a134710b7c12cb8134490f58c9b5f` before the current uncommitted website and handoff edits.
+- Handoff PR #2 (`Add sanitized final trial handoff`) was merged into `main` at `41b430ef873a134710b7c12cb8134490f58c9b5f` on 2026-09-19. All PR checks passed on Linux Node 22/24/26 and macOS Node 22.
+- The npm account is authenticated in the current workspace, but `docs-trials@0.1.0` is not published. The release gate passed lint, formatting, typecheck, all 216 tests, and package validation after installing the local Playwright Chromium binary.
+- npm publication stopped at the registry with HTTP 403: `Two-factor authentication or granular access token with bypass 2fa enabled is required to publish packages.` The built artifact was `release/docs-trials-0.1.0.tgz`; no npm version was created.
+- Website public-install copy is edited locally in `website/src/pages/index.astro` and matching install-block styles are in `website/src/styles/global.css`. Astro check, production build, and `git diff --check` passed. These edits are intentionally uncommitted so the owner can perform a visual polish pass.
+- The owner paused work after requesting this handoff. Do not deploy the website or commit/push the website edits until the owner completes that pass and explicitly asks to continue.
 
 ## Next Work
 
-1. Obtain explicit approval before npm publication or website deployment.
+1. Owner reviews and polishes the uncommitted website changes in `website/src/pages/index.astro` and `website/src/styles/global.css`.
+2. Configure npm publishing for the authenticated owner account using either a publish-time OTP or a granular access token with publish permission and 2FA bypass. Do not place the token or OTP in this file, Git, or chat.
+3. Ensure an executable `pnpm` is available on `PATH` (the publish script invokes `pnpm` as a child process; `corepack pnpm` alone is insufficient for that child lookup), then run `pnpm release:publish` from the repository root.
+4. Confirm publication with `npm view docs-trials version`; install the public package in a clean environment and run the matching Chromium setup.
+5. After owner approval of the website, commit and push the website update, confirm CI, then deploy the website and smoke-test production links, sample evidence, and mobile layout.
 
 ## Required Files
 
@@ -31,5 +40,6 @@ Updated: 2026-09-10
 
 ## Blockers
 
-- Publication and deployment approval are not recorded.
+- npm publication requires the owner’s npm 2FA/Granular Access Token configuration; the package remains unpublished.
+- Website visual review is pending owner input. Website deployment is intentionally paused.
 - The final attempt and ignored acceptance workspace are local-only. They are not transferred by Git and must not be added to the public repository without a separate evidence-disclosure review.

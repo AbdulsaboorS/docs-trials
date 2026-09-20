@@ -453,10 +453,24 @@ code {
 .kicker.inverse::before {
   background: #70d49f;
 }
-.install-grid > div > p:last-child {
+.install-grid > div > p:not(.kicker) {
   max-width: 32rem;
   color: #bdbdb5;
   font: 1.05rem/1.6 var(--serif);
+}
+.install-grid pre {
+  max-width: 32rem;
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  color: #f5f1e8;
+  background: #292a26;
+  font: 0.8rem/1.7 var(--mono);
+}
+.install-grid .inverse-link {
+  display: inline-block;
+  margin-top: 1.5rem;
+  color: #f5f1e8;
 }
 .code-window {
   border-top: 1px solid #5b5d56;
