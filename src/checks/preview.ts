@@ -5,7 +5,13 @@ import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { redact } from "../core/redact";
 import { commandEnvironment, describeCommandEnvironment } from "../util/environment";
-import { delay, interruptWasRequested, terminateProcessTree, trackChild } from "../util/process";
+import {
+  delay,
+  interruptWasRequested,
+  processGroupDescendants,
+  terminateProcessTree,
+  trackChild,
+} from "../util/process";
 
 const maxOutputBytes = 200_000;
 const runFile = promisify(execFile);
@@ -141,7 +147,8 @@ export async function startPreview(
       evidence,
     };
   }
-  trackChild(child);
+  const ownedGroups = new Set<number>();
+  const untrackChild = trackChild(child, ownedGroups, true);
 
   const append = (chunk: Buffer) => {
     const remaining = maxOutputBytes - bytes;
@@ -165,7 +172,8 @@ export async function startPreview(
   const stop = async () => {
     if (ownershipTimer) clearInterval(ownershipTimer);
     await ownershipCheck;
-    const succeeded = await terminateProcessTree(child);
+    const succeeded = await terminateProcessTree(child, ownedGroups);
+    untrackChild();
     facts.cleanupStatus = succeeded ? "succeeded" : "failed";
     return succeeded;
   };
@@ -230,6 +238,7 @@ export async function startPreview(
           evidence,
         };
       }
+      for (const group of ownership.groups ?? []) ownedGroups.add(group);
       const expectedOwners = ownership.owners;
       let ownershipStable = true;
       const checkOwnership = async () => {
@@ -280,38 +289,28 @@ export async function startPreview(
 async function listenerOwnership(
   value: string,
   processGroupId: number | undefined,
-): Promise<{ status: "owned" | "foreign" | "unknown"; owners?: Set<number> }> {
+): Promise<{
+  status: "owned" | "foreign" | "unknown";
+  owners?: Set<number>;
+  groups?: Set<number>;
+}> {
   if (!processGroupId || process.platform === "win32") return { status: "unknown" };
-  const groupPids = await processGroupMembers(processGroupId);
-  if (!groupPids) return { status: "unknown" };
+  const descendants = await processGroupDescendants(processGroupId);
+  if (!descendants) return { status: "unknown" };
   const owners = await listenerOwners(new URL(value));
   if (!owners || owners.size === 0) return { status: "unknown" };
-  return [...owners].every((pid) => groupPids.has(pid))
-    ? { status: "owned", owners }
-    : { status: "foreign", owners };
+  const groups = new Set<number>();
+  for (const pid of owners) {
+    const group = descendants.get(pid);
+    if (group === undefined) return { status: "foreign", owners };
+    groups.add(group);
+  }
+  return { status: "owned", owners, groups };
 }
 
 async function listenerOwners(url: URL): Promise<Set<number> | undefined> {
   const port = Number(url.port || "80");
   return process.platform === "linux" ? linuxListenerOwners(port) : lsofListenerOwners(port);
-}
-
-async function processGroupMembers(processGroupId: number): Promise<Set<number> | undefined> {
-  try {
-    const { stdout } = await runFile("ps", ["-A", "-o", "pid=", "-o", "pgid="], {
-      maxBuffer: 2_000_000,
-    });
-    const members = new Set<number>();
-    for (const line of stdout.split("\n")) {
-      const [pidText, groupText] = line.trim().split(/\s+/);
-      const pid = Number(pidText);
-      const group = Number(groupText);
-      if (Number.isSafeInteger(pid) && group === processGroupId) members.add(pid);
-    }
-    return members;
-  } catch {
-    return undefined;
-  }
 }
 
 async function lsofListenerOwners(port: number): Promise<Set<number> | undefined> {

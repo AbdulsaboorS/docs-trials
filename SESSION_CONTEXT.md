@@ -1,45 +1,32 @@
 # Session Context
 
-Updated: 2026-09-19
+Updated: 2026-09-25
 
 ## Last Session Summary
 
-- Gate 2 and release preparation remain complete; npm and the production website are unpublished.
-- Owner acceptance found that generated port 5173 could already be occupied. The verifier honestly made that attempt inconclusive, and issue #1 records the initialization UX defect.
-- `docs-trials init` now reserves an available dual-stack port, falls back to IPv4 when needed, and writes the same port into a portable start command and `localhost` URL.
-- Added deterministic and real-socket init tests, documented the later port race, and excluded the Git-ignored `.docs-trials/` directory from ESLint.
-- Independent review found no remaining correctness defect. Broader forced IPv4-fallback and generated-manifest framework-matrix coverage remain test gaps.
-- `pnpm release:publish:dry-run` passed lint, formatting, types, 216 tests, package installation, and npm publication dry run.
-- Final tarball SHA-256 is `480b1c4f3ce9e166f31679931b0951be2477108ff2a8dedd79776743c08e2f45`.
-- Exact-candidate attempt `final-static-2-20260907-201300-795` was honestly inconclusive after a transient npm install timeout.
-- Exact-candidate attempt `final-static-3-20260908-154337-509` produced 9 passed, 0 failed, and 1 inconclusive check. The unresolved client-secret check correctly reports uncaptured Vite WebSocket messages.
-- Evidence review found no credential value. Abdulsaboor approved owner acceptance on 2026-09-08; publication and deployment remain unapproved.
-- Port-selection fix `8efa05d` is pushed, issue #1 is closed, and CI passed on Linux Node 22/24/26 and macOS Node 22: https://github.com/AbdulsaboorS/docs-trials/actions/runs/34247081582
-- Local viewing of the final static subject was rechecked on 2026-09-10. It returned HTTP 200 while Vite was running; the URL expires when the foreground server exits, and `index.html` can be opened directly.
-- Repository `main` and `origin/main` are synchronized at merged commit `41b430ef873a134710b7c12cb8134490f58c9b5f` before the current uncommitted website and handoff edits.
-- Handoff PR #2 (`Add sanitized final trial handoff`) was merged into `main` at `41b430ef873a134710b7c12cb8134490f58c9b5f` on 2026-09-19. All PR checks passed on Linux Node 22/24/26 and macOS Node 22.
-- The npm account is authenticated in the current workspace, but `docs-trials@0.1.0` is not published. The release gate passed lint, formatting, typecheck, all 216 tests, and package validation after installing the local Playwright Chromium binary.
-- npm publication stopped at the registry with HTTP 403: `Two-factor authentication or granular access token with bypass 2fa enabled is required to publish packages.` The built artifact was `release/docs-trials-0.1.0.tgz`; no npm version was created.
-- Website public-install copy is edited locally in `website/src/pages/index.astro` and matching install-block styles are in `website/src/styles/global.css`. Astro check, production build, and `git diff --check` passed. These edits are intentionally uncommitted so the owner can perform a visual polish pass.
-- The owner paused work after requesting this handoff. Do not deploy the website or commit/push the website edits until the owner completes that pass and explicitly asks to continue.
+- v0.1.0 remains unpublished and the production website remains undeployed. `npm view docs-trials version` returned 404 on 2026-09-25.
+- Earlier Gate 2 and owner acceptance used tarball SHA-256 `480b1c4f3ce9e166f31679931b0951be2477108ff2a8dedd79776743c08e2f45`. That acceptance does not apply to the changed candidate.
+- Local commit `6731f3f` already contains the website installation copy. Local `main` is ahead of `origin/main`; the owner has not completed visual review. Do not push or deploy it before that review and approval.
+- A real Vite framework trial exposed a boot ownership error: pnpm launched the server as a descendant in another process group. The verifier now accepts that traceable descendant and terminates its group. Tests cover ownership, cleanup when `lsof` fails, and interrupt cleanup.
+- `pnpm release:publish:dry-run` passed lint, formatting, typecheck, all 219 tests, package installation, browser setup, and npm publish dry run. The rebuilt local tarball SHA-256 is `5ca63779a37de6ef1cf32ea9320109269ac246184137a8d8fb34cf01cbbc678c`.
+- Real static, Vite, Astro, and Next framework trials passed. A new trial of the preserved final static subject reported 9 passed, 0 failed, and 1 inconclusive check; WebSocket messages remain uncaptured. Its report is at `/tmp/docs-trials-final.hJEmSD/runs/final-static-3-20260926-042339-450/AX.md`.
+- That recheck needed an explicitly allowed temporary `npm_config_cache`: the account's default npm cache has an `EACCES` error. An earlier failed install attempt remains in `/tmp/docs-trials-recheck.qSkZN3/`.
+- Astro check, site build, Wrangler deploy dry run, and 28 generated local links/assets passed. GitHub Issues is enabled.
 
 ## Next Work
 
-1. Owner reviews and polishes the uncommitted website changes in `website/src/pages/index.astro` and `website/src/styles/global.css`.
-2. Configure npm publishing for the authenticated owner account using either a publish-time OTP or a granular access token with publish permission and 2FA bypass. Do not place the token or OTP in this file, Git, or chat.
-3. Ensure an executable `pnpm` is available on `PATH` (the publish script invokes `pnpm` as a child process; `corepack pnpm` alone is insufficient for that child lookup), then run `pnpm release:publish` from the repository root.
-4. Confirm publication with `npm view docs-trials version`; install the public package in a clean environment and run the matching Chromium setup.
-5. After owner approval of the website, commit and push the website update, confirm CI, then deploy the website and smoke-test production links, sample evidence, and mobile layout.
-
-## Required Files
-
-- `AGENTS.md`, `CONTEXT.md`, `docs/PRODUCT.md`, and `SESSION_CONTEXT.md`
-- `src/commands/init.ts`, `tests/init.test.ts`, `README.md`, and `eslint.config.js`
-- `docs/LAUNCH.md`
-- `~/.docs-trials/runs/final-static-3-20260908-154337-509/`
+1. Owner reviews the local website and its install copy.
+2. Reassess Gate 2 under the changed verifier and rerun affected unsteered attempts with one frozen candidate. Owner repeats acceptance of that exact candidate and records its digest and evidence.
+3. With explicit publication approval, configure npm publish 2FA or a suitable granular token, put `pnpm` on `PATH`, run `pnpm release:publish`, and verify a clean public install and Chromium setup.
+4. With website approval, push, confirm CI, deploy, and test production links, evidence, and mobile layout. Finish GitHub metadata, release, and announcement items in `docs/LAUNCH.md`.
 
 ## Blockers
 
-- npm publication requires the owner’s npm 2FA/Granular Access Token configuration; the package remains unpublished.
-- Website visual review is pending owner input. Website deployment is intentionally paused.
-- The final attempt and ignored acceptance workspace are local-only. They are not transferred by Git and must not be added to the public repository without a separate evidence-disclosure review.
+- Current-candidate Gate 2 and owner acceptance are pending; the original ten private attempt directories are unavailable on this machine. The sanitized public final attempt remains in `handoff/final-static-3/`.
+- npm publication still needs owner approval and publish-time 2FA/token setup. Website push and deployment await visual approval.
+
+## Required Files
+
+- `AGENTS.md`, `CONTEXT.md`, `docs/PRODUCT.md`, `docs/LAUNCH.md`, and this file.
+- `src/checks/preview.ts`, `src/util/process.ts`, `tests/baseline.test.ts`, and `tests/process.test.ts`.
+- `website/src/pages/index.astro`, `website/src/styles/global.css`, and `handoff/final-static-3/README.md`.

@@ -1,4 +1,8 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { promisify } from "node:util";
+
+const runFile = promisify(execFile);
+const processListArgs = ["-A", "-o", "pid=", "-o", "ppid=", "-o", "pgid="];
 
 export function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -11,7 +15,11 @@ export function delay(milliseconds: number): Promise<void> {
  * process outlived a 100 ms grace period, which discarded the completed run
  * and every piece of evidence with it. The caller receives a boolean instead.
  */
-export async function terminateProcessTree(child: ChildProcess): Promise<boolean> {
+export async function terminateProcessTree(
+  child: ChildProcess,
+  descendantGroups: ReadonlySet<number> = new Set(),
+  interrupting = false,
+): Promise<boolean> {
   if (!child.pid) return true;
   if (process.platform === "win32") {
     await new Promise<void>((resolve) => {
@@ -24,8 +32,8 @@ export async function terminateProcessTree(child: ChildProcess): Promise<boolean
     return true;
   }
 
-  const groupId = child.pid;
-  const groupExists = () => {
+  const groups = new Set([child.pid, ...descendantGroups]);
+  const groupExists = (groupId: number) => {
     try {
       process.kill(-groupId, 0);
       return true;
@@ -34,20 +42,82 @@ export async function terminateProcessTree(child: ChildProcess): Promise<boolean
     }
   };
   const send = (signal: NodeJS.Signals) => {
-    try {
-      process.kill(-groupId, signal);
-    } catch {
-      // The group may exit between the check and the signal.
+    for (const groupId of groups) {
+      try {
+        process.kill(-groupId, signal);
+      } catch {
+        // A group may exit between the check and the signal.
+      }
     }
   };
+  const anyGroupExists = () => [...groups].some(groupExists);
 
-  if (!groupExists()) return true;
+  // Other signal handlers may exit the process at the first async boundary.
+  const descendants = interrupting
+    ? processGroupDescendantsSync(child.pid)
+    : await processGroupDescendants(child.pid);
+  for (const group of descendants?.values() ?? []) groups.add(group);
+
+  if (!anyGroupExists()) return true;
   send("SIGTERM");
-  for (let attempt = 0; attempt < 20 && groupExists(); attempt += 1) await delay(100);
-  if (!groupExists()) return true;
+  for (let attempt = 0; attempt < 20 && anyGroupExists(); attempt += 1) await delay(100);
+  if (!anyGroupExists()) return true;
   send("SIGKILL");
-  for (let attempt = 0; attempt < 10 && groupExists(); attempt += 1) await delay(100);
-  return !groupExists();
+  for (let attempt = 0; attempt < 10 && anyGroupExists(); attempt += 1) await delay(100);
+  return !anyGroupExists();
+}
+
+export async function processGroupDescendants(
+  processGroupId: number,
+): Promise<Map<number, number> | undefined> {
+  try {
+    const { stdout } = await runFile("ps", processListArgs, {
+      maxBuffer: 2_000_000,
+    });
+    return parseProcessGroupDescendants(stdout, processGroupId);
+  } catch {
+    return undefined;
+  }
+}
+
+function processGroupDescendantsSync(processGroupId: number): Map<number, number> | undefined {
+  try {
+    const stdout = execFileSync("ps", processListArgs, {
+      encoding: "utf8",
+      maxBuffer: 2_000_000,
+    });
+    return parseProcessGroupDescendants(stdout, processGroupId);
+  } catch {
+    return undefined;
+  }
+}
+
+function parseProcessGroupDescendants(stdout: string, processGroupId: number): Map<number, number> {
+  const processes: Array<{ pid: number; parent: number; group: number }> = [];
+  const descendants = new Map<number, number>();
+  for (const line of stdout.split("\n")) {
+    const [pidText, parentText, groupText] = line.trim().split(/\s+/);
+    const pid = Number(pidText);
+    const parent = Number(parentText);
+    const group = Number(groupText);
+    if (
+      !Number.isSafeInteger(pid) ||
+      !Number.isSafeInteger(parent) ||
+      !Number.isSafeInteger(group)
+    ) {
+      continue;
+    }
+    processes.push({ pid, parent, group });
+    if (group === processGroupId) descendants.set(pid, group);
+  }
+  // A package manager can start a child in a new group. Its ancestry still ties it to this launch.
+  for (let size = -1; size !== descendants.size;) {
+    size = descendants.size;
+    for (const process of processes) {
+      if (descendants.has(process.parent)) descendants.set(process.pid, process.group);
+    }
+  }
+  return descendants;
 }
 
 type InterruptSignal = "SIGHUP" | "SIGINT" | "SIGTERM";
@@ -95,9 +165,14 @@ export function trackInterruptCleanup(
 }
 
 /** Tracks a detached child so an interrupt cannot leave its process group alive. */
-export function trackChild(child: ChildProcess): void {
+export function trackChild(
+  child: ChildProcess,
+  descendantGroups: ReadonlySet<number> = new Set(),
+  retainAfterClose = false,
+): () => void {
   const untrack = trackInterruptCleanup(async () => {
-    await terminateProcessTree(child);
+    await terminateProcessTree(child, descendantGroups, true);
   }, "children");
-  child.once("close", untrack);
+  if (!retainAfterClose) child.once("close", untrack);
+  return untrack;
 }

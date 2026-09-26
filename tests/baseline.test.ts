@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createServer as createTcpServer, type AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Duplex } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { runBaseline } from "../src/checks";
@@ -81,6 +83,20 @@ async function availablePort(): Promise<number> {
     server.close((error) => (error ? reject(error) : resolve())),
   );
   return port;
+}
+
+function detachedPreviewCommand(port: number): string {
+  return `PORT=${port} SAMPLE_MODE=clean node -e 'const { spawn } = require("node:child_process"); const child = spawn(process.execPath, ["server.mjs"], { detached: true, stdio: "inherit" }); console.log("CHILD_PID=" + child.pid); setInterval(() => {}, 1000)'`;
+}
+
+async function expectPortFree(port: number): Promise<void> {
+  await new Promise<void>((resolveListen, reject) => {
+    const server = createTcpServer();
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () =>
+      server.close((error) => (error ? reject(error) : resolveListen())),
+    );
+  });
 }
 
 async function startWebSocketServer(): Promise<{
@@ -525,6 +541,75 @@ describe("runBaseline", { timeout: 120_000 }, () => {
       await new Promise((done) => foreign.close(done));
     }
   });
+
+  it("accepts and stops a descendant server in its own process group", async () => {
+    const port = await availablePort();
+    const preview = await startPreview(
+      detachedPreviewCommand(port),
+      fixture,
+      `http://127.0.0.1:${port}`,
+      10,
+    );
+    const childPid = Number(/CHILD_PID=(\d+)/.exec(preview.output)?.[1]);
+    try {
+      expect(preview.available).toBe(true);
+      if (!preview.available) return;
+      expect(await preview.confirmOwnership()).toBe(true);
+      expect(await preview.stop()).toBe(true);
+      await expect(expectPortFree(port)).resolves.toBeUndefined();
+    } finally {
+      await preview.stop();
+      if (Number.isSafeInteger(childPid)) {
+        try {
+          process.kill(-childPid, "SIGKILL");
+        } catch {
+          // The preview cleanup should have already stopped this group.
+        }
+      }
+    }
+  });
+
+  it.skipIf(process.platform !== "darwin")(
+    "stops a descendant server when listener ownership cannot be read",
+    async () => {
+      const port = await availablePort();
+      const wrapper = await mkdtemp(join(tmpdir(), "docs-trials-lsof-"));
+      const originalPath = process.env.PATH;
+      await writeFile(join(wrapper, "lsof"), "#!/bin/sh\nexit 1\n");
+      await chmod(join(wrapper, "lsof"), 0o755);
+      process.env.PATH = `${wrapper}:${originalPath ?? ""}`;
+      let childPid = Number.NaN;
+      try {
+        const preview = await startPreview(
+          detachedPreviewCommand(port),
+          fixture,
+          `http://127.0.0.1:${port}`,
+          10,
+        );
+        childPid = Number(/CHILD_PID=(\d+)/.exec(preview.output)?.[1]);
+        try {
+          expect(preview.available).toBe(false);
+          if (preview.available) return;
+          expect(preview.reason).toBe("infrastructure");
+          expect(preview.detail).toContain("could not establish which process owns its listener");
+          expect(await preview.stop()).toBe(true);
+          await expect(expectPortFree(port)).resolves.toBeUndefined();
+        } finally {
+          await preview.stop();
+        }
+      } finally {
+        if (Number.isSafeInteger(childPid)) {
+          try {
+            process.kill(-childPid, "SIGKILL");
+          } catch {
+            // The preview cleanup should have already stopped this group.
+          }
+        }
+        process.env.PATH = originalPath;
+        await rm(wrapper, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("detects listener ownership that changes after boot", async () => {
     const port = await availablePort();

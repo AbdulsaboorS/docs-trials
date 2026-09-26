@@ -1,6 +1,6 @@
 # v0.1.0 Launch Checklist
 
-Status: Pre-release
+Status: Pre-release. A process-ownership fix changed the candidate after the 2026-09-08 owner acceptance.
 
 Publication and production deployment require explicit owner approval.
 
@@ -21,8 +21,9 @@ Publication and production deployment require explicit owner approval.
 
 ## 3. Owner Manual Acceptance
 
-The owner personally tests representative local trials before any npm
-publication or production website deployment.
+The completed items below record acceptance of the earlier candidate. The owner
+personally tests representative local trials before any npm publication or
+production website deployment.
 
 - [x] Install the release tarball in a clean environment and run
       `docs-trials install-browser`.
@@ -48,15 +49,27 @@ Acceptance date: 2026-09-08
 
 Owner sign-off: Abdulsaboor approved on 2026-09-08.
 
+The current candidate includes a process-ownership fix and produces a different
+tarball. The earlier sign-off does not apply to it. Before publication:
+
+Current local tarball SHA-256 (not yet owner accepted):
+`5ca63779a37de6ef1cf32ea9320109269ac246184137a8d8fb34cf01cbbc678c`.
+Recheck the digest after any rebuild.
+
+- [ ] Reassess the Gate 2 attempts under the changed verifier and rerun affected
+      attempts with one frozen candidate, as required by `docs/PRODUCT.md`.
+- [ ] Owner repeats representative local acceptance with the current tarball,
+      reviews its report and evidence, and records its digest and sign-off.
+
 ## 4. Publish And Deploy
 
 - [ ] Give explicit approval for npm publication and website deployment.
 - [ ] Run `pnpm release:publish` for `docs-trials@0.1.0`.
 - [ ] Install the public npm package in a clean environment and verify the CLI
       and matching Chromium setup.
-- [ ] Replace the website's pre-release section with npm installation commands
-      and a link to the npm package, then commit it, confirm CI, and rebuild the
-      site.
+- [x] Prepare and commit the website npm installation copy locally.
+- [ ] After visual approval, push the website update, confirm CI, and rebuild
+      the site.
 - [ ] Deploy the production website.
 - [ ] Test every production link, sample evidence file, and mobile layout.
 
@@ -65,7 +78,7 @@ Owner sign-off: Abdulsaboor approved on 2026-09-08.
 - [ ] Set the repository description, website URL, topics, and social preview.
 - [ ] Confirm the public README installation commands work from npm.
 - [ ] Create the `v0.1.0` GitHub release with concise release notes.
-- [ ] Confirm the public issue-reporting path is ready.
+- [x] Confirm GitHub Issues is enabled as the public issue-reporting path.
 
 ## 6. Announce
 
