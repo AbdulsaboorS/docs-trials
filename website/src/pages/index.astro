@@ -16,21 +16,40 @@ const checks = [
 ---
 
 <Base
-  title="Docs Trials — Can an agent actually build from your docs?"
+  title="Docs Trials: Can an agent actually build from your docs?"
   description="Run a coding agent against your documentation, verify the application it builds, and keep evidence you can inspect."
 >
-  <section class="hero shell">
+  <section class="hero shell" aria-labelledby="hero-title">
     <div class="hero-copy">
-      <p class="kicker"><span>Local CLI</span> Evidence before opinions</p>
-      <h1>Can an agent actually build from your docs?</h1>
+      <p class="pill-row">
+        <span class="pill">Local CLI</span>
+        <span class="pill pill-outline">Evidence before opinions</span>
+      </p>
+      <h1 id="hero-title">
+        Can an agent actually build from <mark>your docs</mark>?
+      </h1>
       <p class="lede">
         Give a coding agent your documentation and a disposable starter app. Docs Trials freezes the
         inputs, runs deterministic checks against what the agent builds, and writes a local report
         with evidence references.
       </p>
+
+      <div class="install-card" role="region" aria-labelledby="install-card-title">
+        <div class="install-card-bar">
+          <h2 id="install-card-title">Install</h2>
+          <span class="sticker sticker-amber">Pre-release</span>
+        </div>
+        <pre><code><span class="prompt" aria-hidden="true">$ </span>npm install -g docs-trials
+<span class="prompt" aria-hidden="true">$ </span>docs-trials install-browser</code></pre>
+        <p class="install-note">
+          <strong>Not on npm yet.</strong> Publication is pending owner approval. After release,
+          these commands install the CLI and its Chromium build. Node 22 or later on macOS or Linux.
+        </p>
+      </div>
+
       <div class="hero-actions">
         <a class="button primary" href="/report/">Inspect a real report</a>
-        <a class="button text" href="#install">Release status <span aria-hidden="true">↓</span></a>
+        <a class="button secondary" href="#install">Release status <span aria-hidden="true">↓</span></a>
       </div>
       <ul class="hero-facts" aria-label="Product facts">
         <li>Runs on your machine</li>
@@ -40,9 +59,10 @@ const checks = [
     </div>
 
     <div class="terminal-wrap" role="region" aria-label="Excerpt from a local Docs Trials report">
-      <div class="terminal-label">Observed, not inferred</div>
+      <span class="sticker sticker-violet terminal-label">Observed, not inferred</span>
       <div class="terminal">
         <div class="terminal-bar">
+          <span class="terminal-dots" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>AX.md</span>
           <span>real attempt</span>
         </div>
@@ -61,18 +81,18 @@ const checks = [
   </section>
 
   <section class="proof-strip" aria-label="Product position">
-    <p>A successful build is not a working integration.</p>
-    <p>A browser observation is not proof of task completion.</p>
-    <p>A failed check is not automatically a documentation finding.</p>
+    <p><span aria-hidden="true">≠</span> A successful build is not a working integration.</p>
+    <p><span aria-hidden="true">≠</span> A browser observation is not proof of task completion.</p>
+    <p><span aria-hidden="true">≠</span> A failed check is not automatically a documentation finding.</p>
   </section>
 
-  <section class="method shell section" id="method">
+  <section class="method shell section" id="method" aria-labelledby="method-title">
     <header class="section-heading">
       <p class="kicker">The method</p>
-      <h2>One frozen trial. One real build. Evidence for every result.</h2>
+      <h2 id="method-title">One frozen trial. One real build. Evidence for every result.</h2>
     </header>
     <ol class="method-grid">
-      <li>
+      <li class="tone-violet">
         <span class="step-number">01</span>
         <h3>Freeze the trial</h3>
         <p>
@@ -81,13 +101,13 @@ const checks = [
         </p>
         <code>docs-trials prepare</code>
       </li>
-      <li>
+      <li class="tone-amber">
         <span class="step-number">02</span>
         <h3>Let the agent build</h3>
         <p>Give the generated instructions to your coding agent in a disposable workspace.</p>
         <code>AGENT_INSTRUCTIONS.md</code>
       </li>
-      <li>
+      <li class="tone-lime">
         <span class="step-number">03</span>
         <h3>Verify the result</h3>
         <p>
@@ -98,15 +118,15 @@ const checks = [
     </ol>
   </section>
 
-  <section class="report-feature shell section">
+  <section class="report-feature shell section" aria-labelledby="report-feature-title">
     <div>
       <p class="kicker">A report, not a score</p>
-      <h2>The local report links results to retained evidence.</h2>
+      <h2 id="report-feature-title">The local report links results to retained evidence.</h2>
       <p>
         The report names what ran, what the browser observed, what remained unresolved, and which
         author goals were not graded. Retained command and browser observations stay beside it.
       </p>
-      <a class="inline-link" href="/report/">Inspect the report and evidence <span>→</span></a>
+      <a class="inline-link" href="/report/">Inspect the report and evidence <span aria-hidden="true">→</span></a>
     </div>
     <dl class="report-ledger">
       <div><dt>Outcome</dt><dd class="pass-text">Baseline passed</dd></div>
@@ -117,15 +137,20 @@ const checks = [
     </dl>
   </section>
 
-  <section class="checks section" id="checks">
+  <section class="checks section" id="checks" aria-labelledby="checks-title">
     <div class="shell checks-layout">
       <header class="section-heading sticky-heading">
         <p class="kicker">Deterministic baseline</p>
-        <h2>Ten checks. No model verdict.</h2>
+        <h2 id="checks-title">Ten checks. No model verdict.</h2>
         <p>
           Checks apply only when their lifecycle step exists. Missing evidence and infrastructure
           trouble are inconclusive, never silently passed.
         </p>
+        <ul class="outcome-key" aria-label="Possible outcomes">
+          <li class="key-pass">passed</li>
+          <li class="key-fail">failed</li>
+          <li class="key-inconclusive">inconclusive</li>
+        </ul>
       </header>
       <ol class="check-list">
         {
@@ -141,10 +166,10 @@ const checks = [
     </div>
   </section>
 
-  <section class="limits shell section">
+  <section class="limits shell section" aria-labelledby="limits-title">
     <div class="limits-title">
       <p class="kicker">The honesty clause</p>
-      <h2>What Docs Trials refuses to claim</h2>
+      <h2 id="limits-title">What Docs Trials refuses to claim</h2>
     </div>
     <div class="limits-list">
       <article>
@@ -175,28 +200,28 @@ const checks = [
     </div>
   </section>
 
-  <section class="install section" id="install">
+  <section class="install section" id="install" aria-labelledby="install-title">
     <div class="shell install-grid">
       <div>
         <p class="kicker inverse">Pre-release</p>
-        <h2>Installation is not public yet.</h2>
+        <h2 id="install-title">Installation is not public yet.</h2>
         <p>
           The inspectable public sample and operator guidance are complete. The npm package has not
           been published. Docs Trials sends no telemetry or reports, but project commands can make
           unrestricted network requests.
         </p>
       </div>
-      <div class="code-window">
-        <div><span>01</span><code>Public sample complete</code></div>
-        <div><span>02</span><code>Operator skill complete</code></div>
-        <div><span>03</span><code>npm publication pending approval</code></div>
-      </div>
+      <ol class="status-list" aria-label="Release status">
+        <li class="status-done"><span>Done</span><code>Public sample complete</code></li>
+        <li class="status-done"><span>Done</span><code>Operator skill complete</code></li>
+        <li class="status-pending"><span>Pending</span><code>npm publication pending approval</code></li>
+      </ol>
     </div>
   </section>
 
-  <section class="closing shell section">
+  <section class="closing shell section" aria-labelledby="closing-title">
     <p class="closing-mark" aria-hidden="true">DT / 00</p>
-    <h2>Test the documentation by building from it.</h2>
+    <h2 id="closing-title">Test the documentation by building from it.</h2>
     <div>
       <p>
         Keep the inputs frozen. Keep the verdict deterministic. Keep every public claim
