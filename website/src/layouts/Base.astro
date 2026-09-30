@@ -15,7 +15,7 @@ const { title, description } = Astro.props;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#f3f0e6" />
+    <meta name="theme-color" content="#fbf8f1" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
@@ -30,10 +30,11 @@ const { title, description } = Astro.props;
         <span>docs-trials</span>
       </a>
       <nav aria-label="Primary navigation">
-        <a href="/#method">Method</a>
-        <a href="/#checks">Checks</a>
-        <a href="/report/">Sample report</a>
+        <a class="nav-wide" href="/#method">Method</a>
+        <a class="nav-wide" href="/#checks">Checks</a>
+        <a class="nav-mid" href="/report/">Sample report</a>
         <a href="https://github.com/AbdulsaboorS/docs-trials">GitHub</a>
+        <a class="nav-cta" href="/#install">Install</a>
       </nav>
     </header>
     <main id="content">
