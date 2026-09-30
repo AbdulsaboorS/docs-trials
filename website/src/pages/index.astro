@@ -42,14 +42,16 @@ const checks = [
         <pre><code><span class="prompt" aria-hidden="true">$ </span>npm install -g docs-trials
 <span class="prompt" aria-hidden="true">$ </span>docs-trials install-browser</code></pre>
         <p class="install-note">
-          <strong>Not on npm yet.</strong> Publication is pending owner approval. After release,
-          these commands install the CLI and its Chromium build. Node 22 or later on macOS or Linux.
+          <strong>Not on npm yet.</strong> Publication is pending owner approval. After release, these
+          commands install the CLI and its Chromium build. Node 22 or later on macOS or Linux.
         </p>
       </div>
 
       <div class="hero-actions">
         <a class="button primary" href="/report/">Inspect a real report</a>
-        <a class="button secondary" href="#install">Release status <span aria-hidden="true">↓</span></a>
+        <a class="button secondary" href="#install"
+          >Release status <span aria-hidden="true">↓</span></a
+        >
       </div>
       <ul class="hero-facts" aria-label="Product facts">
         <li>Runs on your machine</li>
@@ -83,7 +85,9 @@ const checks = [
   <section class="proof-strip" aria-label="Product position">
     <p><span aria-hidden="true">≠</span> A successful build is not a working integration.</p>
     <p><span aria-hidden="true">≠</span> A browser observation is not proof of task completion.</p>
-    <p><span aria-hidden="true">≠</span> A failed check is not automatically a documentation finding.</p>
+    <p>
+      <span aria-hidden="true">≠</span> A failed check is not automatically a documentation finding.
+    </p>
   </section>
 
   <section class="method shell section" id="method" aria-labelledby="method-title">
@@ -126,7 +130,9 @@ const checks = [
         The report names what ran, what the browser observed, what remained unresolved, and which
         author goals were not graded. Retained command and browser observations stay beside it.
       </p>
-      <a class="inline-link" href="/report/">Inspect the report and evidence <span aria-hidden="true">→</span></a>
+      <a class="inline-link" href="/report/"
+        >Inspect the report and evidence <span aria-hidden="true">→</span></a
+      >
     </div>
     <dl class="report-ledger">
       <div><dt>Outcome</dt><dd class="pass-text">Baseline passed</dd></div>
@@ -214,7 +220,9 @@ const checks = [
       <ol class="status-list" aria-label="Release status">
         <li class="status-done"><span>Done</span><code>Public sample complete</code></li>
         <li class="status-done"><span>Done</span><code>Operator skill complete</code></li>
-        <li class="status-pending"><span>Pending</span><code>npm publication pending approval</code></li>
+        <li class="status-pending">
+          <span>Pending</span><code>npm publication pending approval</code>
+        </li>
       </ol>
     </div>
   </section>

@@ -21,8 +21,9 @@
   --shadow-lg: 7px 7px 0 var(--ink);
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --display: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI Variable Display", system-ui,
-    -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --display:
+    ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI Variable Display", system-ui, -apple-system,
+    "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 * {

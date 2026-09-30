@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { terminateProcessTree } from "../src/util/process";
 
 const fixtureDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -128,6 +129,37 @@ async function waitForProcessesToExit(pids: number[]): Promise<void> {
 }
 
 describe.skipIf(process.platform === "win32")("interrupt cleanup", () => {
+  it("stops an unrecorded detached descendant before its wrapper exits", async () => {
+    const parent = spawn(
+      process.execPath,
+      [
+        "-e",
+        'const {spawn}=require("node:child_process");const child=spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{detached:true,stdio:"ignore"});console.log("CHILD_PID="+child.pid);console.log("READY");process.on("SIGTERM",()=>process.exit(0));setInterval(()=>{},1000)',
+      ],
+      { detached: true, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let output = "";
+    parent.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+    });
+    let childPid = Number.NaN;
+    try {
+      await waitForLine(parent, "READY", () => "");
+      childPid = Number(/CHILD_PID=(\d+)/.exec(output)?.[1]);
+      expect(Number.isSafeInteger(childPid)).toBe(true);
+      expect(await terminateProcessTree(parent, new Set(), true)).toBe(true);
+      for (let attempt = 0; attempt < 20 && processExists(childPid); attempt += 1) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+      }
+      expect(processExists(childPid)).toBe(false);
+    } finally {
+      if (parent.pid && processExists(parent.pid)) process.kill(-parent.pid, "SIGKILL");
+      if (Number.isSafeInteger(childPid) && processExists(childPid)) {
+        process.kill(-childPid, "SIGKILL");
+      }
+    }
+  });
+
   it("releases children and subordinate state before owner locks", async () => {
     const parent = spawn(process.execPath, ["--import", "tsx", orderedCleanupFixture], {
       stdio: ["ignore", "pipe", "pipe"],
