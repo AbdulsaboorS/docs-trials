@@ -1,89 +1,96 @@
 # v0.1.0 Launch Checklist
 
-Status: Pre-release. A process-ownership fix changed the candidate after the 2026-09-08 owner acceptance.
+Updated: 2026-09-29. Status: pre-release; npm publication remains owner work.
 
-Publication and production deployment require explicit owner approval.
+## Release Candidate
 
-## 1. Finalize The Release Candidate
+- [x] Push the process-ownership fix and installation preparation.
+- [x] Resolve PR #3 against current `main`, retain the approved design and
+      accurate pre-release copy, pass all four CI jobs, and merge.
+- [x] Pass merged-commit CI on Linux Node 22, 24, and 26, and macOS Node 22.
+- [x] Pass lint, formatting, type checking, 219 tests, build, package installation,
+      matching Chromium setup, and `pnpm release:publish:dry-run`.
+- [x] Pass real static HTML, Vite, Astro, and Next.js framework smoke trials.
+- [x] Review the exact five-file npm upload set.
+- [x] Complete and independently audit ten fresh, unsteered Gate 2 attempts with
+      this candidate: 97 passed checks, with three build checks explicitly omitted.
 
-- [x] Review the release-preparation worktree.
-- [x] Commit and push the intended files.
-- [x] Confirm CI passes on the release commit.
-- [x] Confirm `pnpm release:publish:dry-run` passes.
-- [x] Enable and test GitHub private vulnerability reporting.
+Frozen candidate: `release/docs-trials-0.1.0.tgz` (134,900 bytes).
 
-## 2. Finalize The Website
+SHA-256: `5ca63779a37de6ef1cf32ea9320109269ac246184137a8d8fb34cf01cbbc678c`.
 
-- [x] Review the landing page, real sample report, and public evidence links.
-- [x] Confirm the methodology, limits, security policy, and operator skill agree.
-- [x] Run the site check, build, mobile smoke test, and Wrangler dry run.
-- [x] Keep the website undeployed until owner acceptance is complete.
+Upload set: `LICENSE`, `README.md`, `dist/cli.js`, `dist/cli.js.map`, and
+`package.json`. A private frozen copy and validation logs are retained in
+`~/.docs-trials/launch-20260929/`. Recheck the digest after any rebuild. A change
+to the verifier requires reassessing affected Gate 2 attempts.
 
-## 3. Owner Manual Acceptance
+## Current Gate 2 Evidence
 
-The completed items below record acceptance of the earlier candidate. The owner
-personally tests representative local trials before any npm publication or
-production website deployment.
+The selected ten attempts cover htmx (two), Alpine.js (one), Chart.js (two),
+marked (two), Astro (two), and Next.js (one), across static HTML, Vite, Astro,
+and the Next.js App Router framework. Four repeated pairs have matching starter,
+documentation digests, lifecycle, runtime, and agent/model settings. All 131
+report links resolve to retained evidence or frozen documentation. The Next.js
+production server served prerendered routes; request-time dynamic rendering was
+not demonstrated.
 
-- [x] Install the release tarball in a clean environment and run
+The selected cohort uses OpenCode 1.18.33 with `openrouter/openai/gpt-6-luna`
+and Codex CLI 0.159.2 with `gpt-6.1-sol`. Additional sessions remain retained:
+one original Chart.js attempt failed network egress for undeclared Google Fonts
+origins; account interruptions and an incorrect harness-version preparation
+required fresh cohorts. Selection and exclusion reasons are documented privately.
+These results are mechanical observations, without task verification, agent
+ranking, or documentation causality claims.
+
+## Website And GitHub
+
+- [x] Deploy the approved static site to the default `workers.dev` address for
+      owner review, as authorized in the 2026-09-29 handoff.
+- [x] Check production internal targets, external links, and sample evidence.
+- [x] Check home and report pages at 320, 375, 768, and 1440 pixels, including
+      keyboard focus, skip navigation, anchor position, and report-table scrolling.
+- [x] Confirm all seven public sample files match the approved local files.
+- [x] Set the GitHub description, topics, and homepage.
+- [x] Prepare a draft GitHub release with the exact frozen tarball attached.
+- [x] Prepare and check the post-publication copy patch without deploying it.
+
+Website: <https://docs-trials.feedback-signal.workers.dev>.
+Sample: <https://docs-trials.feedback-signal.workers.dev/report/>.
+Worker version: `0f01d167-bec1-43fa-845d-a23da83dfc76`.
+The page accurately says "Not on npm yet."
+
+The GitHub `v0.1.0` release is a draft. Private production QA and the checked
+post-publication patch are retained in `~/.docs-trials/launch-20260929/`.
+
+## Owner Acceptance And npm Publication
+
+The 2026-09-08 owner acceptance covered SHA-256
+`480b1c4f3ce9e166f31679931b0951be2477108ff2a8dedd79776743c08e2f45`.
+It does not accept the changed verifier or current candidate.
+
+- [ ] Review the current Gate 2 reports and retained evidence.
+- [ ] Install the exact frozen tarball in a clean environment and run
       `docs-trials install-browser`.
-- [x] In disposable starter projects, manually run the complete `init`,
-      `prepare`, subject-agent, and `verify` flow.
-- [x] Read each generated report and its referenced evidence.
-- [x] Confirm passed, failed, and inconclusive observations are described
-      honestly where the manual trials produce them.
-- [x] Confirm no credential appears in retained evidence and no private local
-      path appears in an artifact selected for public release.
-- [x] Record the tested tarball digest, attempt IDs, date, and owner sign-off
-      below.
+- [ ] Personally complete representative `init`, `prepare`, subject-agent, and
+      `verify` flows; read the reports and referenced evidence.
+- [ ] Record the accepted current digest, attempt IDs, date, and owner sign-off.
+- [ ] Publish npm with owner-controlled publish-time 2FA or an appropriate token.
+      Keep credentials out of chat, repository files, and retained artifacts.
 
-Tarball digest: `480b1c4f3ce9e166f31679931b0951be2477108ff2a8dedd79776743c08e2f45`
+No npm package or announcement was published during this session.
 
-Attempt IDs: `agents-ai-search-us-open-20260907-190832-992`,
-`agents-ai-search-us-open-20260907-192831-169`,
-`final-static-20260907-195949-192`,
-`final-static-2-20260907-201300-795`, and
-`final-static-3-20260908-154337-509`
+## After npm Publication
 
-Acceptance date: 2026-09-08
+1. Confirm `npm view docs-trials@0.1.0 version` against the public npm registry.
+2. Install the public package in a clean environment; verify CLI help, matching
+   Chromium installation, and a real representative trial.
+3. Apply `~/.docs-trials/launch-20260929/website-after-npm.patch` after checking
+   that it still applies. Run site checks, build, and formatting; commit and push.
+4. Redeploy the Worker and confirm installation copy, links, sample evidence,
+   and mobile layout in production.
+5. Publish the prepared GitHub release only after the package and website checks.
+6. The owner posts the announcement with website, sample, npm, and GitHub links.
+   State that the baseline checks mechanical web health, without verifying task
+   fulfillment or documentation causality. Monitor installation issues afterward.
 
-Owner sign-off: Abdulsaboor approved on 2026-09-08.
-
-The current candidate includes a process-ownership fix and produces a different
-tarball. The earlier sign-off does not apply to it. Before publication:
-
-Current local tarball SHA-256 (not yet owner accepted):
-`5ca63779a37de6ef1cf32ea9320109269ac246184137a8d8fb34cf01cbbc678c`.
-Recheck the digest after any rebuild.
-
-- [ ] Reassess the Gate 2 attempts under the changed verifier and rerun affected
-      attempts with one frozen candidate, as required by `docs/PRODUCT.md`.
-- [ ] Owner repeats representative local acceptance with the current tarball,
-      reviews its report and evidence, and records its digest and sign-off.
-
-## 4. Publish And Deploy
-
-- [ ] Give explicit approval for npm publication and website deployment.
-- [ ] Run `pnpm release:publish` for `docs-trials@0.1.0`.
-- [ ] Install the public npm package in a clean environment and verify the CLI
-      and matching Chromium setup.
-- [x] Prepare and commit the website npm installation copy locally.
-- [ ] After visual approval, push the website update, confirm CI, and rebuild
-      the site.
-- [ ] Deploy the production website.
-- [ ] Test every production link, sample evidence file, and mobile layout.
-
-## 5. Prepare GitHub For Launch
-
-- [ ] Set the repository description, website URL, topics, and social preview.
-- [ ] Confirm the public README installation commands work from npm.
-- [ ] Create the `v0.1.0` GitHub release with concise release notes.
-- [x] Confirm GitHub Issues is enabled as the public issue-reporting path.
-
-## 6. Announce
-
-- [ ] Post the launch on Twitter/X with the website, sample report, npm, and
-      GitHub links.
-- [ ] State the core limit: the baseline checks mechanical web health, not task
-      fulfillment or documentation causality.
-- [ ] Monitor installation reports and issues after launch.
+GitHub Issues and private vulnerability reporting are enabled. A social preview upload remains an optional owner choice.

@@ -37,4 +37,5 @@ against another same-user process. The subject package name and dependency
 range match the accepted subject, and `package-lock.json` preserves the resolved
 dependency versions.
 
-No npm publication or production website deployment has been approved.
+This bundle records an earlier acceptance candidate. See `SESSION_CONTEXT.md`
+and `docs/LAUNCH.md` for current deployment authorization and publication gates.
